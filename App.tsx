@@ -380,7 +380,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {currentRoom.status === RoomStatus.VOTING && currentRoom.submissions.length > 0 && (
+        {currentRoom.status === RoomStatus.VOTING && (currentRoom.submissions?.length || 0) > 0 && (
           <VotingView
             currentSubmission={currentRoom.submissions[currentRoom.currentSubmissionIndex]}
             isMod={currentUser.isMod}
@@ -388,7 +388,7 @@ const App: React.FC = () => {
             onVote={handleVote}
             onNext={handleNextSubmission}
             onFinish={handleFinishGame}
-            isLast={currentRoom.currentSubmissionIndex === currentRoom.submissions.length - 1}
+            isLast={currentRoom.currentSubmissionIndex === (currentRoom.submissions?.length || 0) - 1}
             onUpdateAiComment={handleUpdateAiComment}
           />
         )}
