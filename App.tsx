@@ -4,6 +4,7 @@ import { createRoom } from './services/roomService';
 import { subscribeToRoom, getRoomByPin, saveRoom, isOnlineMode } from './services/roomStorageService';
 import { RoomCodeEntry } from './components/RoomCodeEntry';
 import { WaitingRoom } from './components/WaitingRoom';
+import { LinkSubmission } from './components/LinkSubmission';
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
@@ -344,13 +345,23 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto">
         {currentRoom.status === RoomStatus.SUBMISSION && (
-          <WaitingRoom
-            room={currentRoom}
-            currentUser={currentUser}
-            isMod={currentUser.isMod}
-            onStartVoting={handleStartVoting}
-            onCancelRoom={handleCancelRoom}
-          />
+          <>
+            {currentUser.isMod ? (
+              <WaitingRoom
+                room={currentRoom}
+                currentUser={currentUser}
+                isMod={true}
+                onStartVoting={handleStartVoting}
+                onCancelRoom={handleCancelRoom}
+              />
+            ) : (
+              <LinkSubmission
+                room={currentRoom}
+                currentUser={currentUser}
+                onSubmitLink={handleSubmitLink}
+              />
+            )}
+          </>
         )}
 
         {currentRoom.status === RoomStatus.WAITING && (
