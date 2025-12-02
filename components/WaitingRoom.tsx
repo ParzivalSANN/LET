@@ -18,8 +18,8 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
     onStartVoting,
     onCancelRoom
 }) => {
-    const submittedCount = room.submissions.length;
-    const totalUsers = room.users.filter(u => !u.isMod).length;
+    const submittedCount = room.submissions?.length || 0;
+    const totalUsers = room.users?.filter(u => !u.isMod).length || 0;
     const canStart = submittedCount >= 2; // At least 2 links needed
 
     return (
@@ -78,12 +78,12 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
                 <div className="mb-8">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <UserGroupIcon className="w-5 h-5 text-gray-400" />
-                        Katılımcılar ({room.users.filter(u => !u.isMod).length})
+                        Katılımcılar ({room.users?.filter(u => !u.isMod).length || 0})
                     </h3>
 
                     <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        {room.users.filter(u => !u.isMod).map((user) => {
-                            const hasSubmitted = room.submissions.some(s => s.userId === user.id);
+                        {room.users?.filter(u => !u.isMod).map((user) => {
+                            const hasSubmitted = room.submissions?.some(s => s.userId === user.id) || false;
 
                             return (
                                 <div
