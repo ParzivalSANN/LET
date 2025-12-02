@@ -69,11 +69,15 @@ const App: React.FC = () => {
     newRoom.users.push(modUser);
     newRoom.status = RoomStatus.SUBMISSION; // Start in submission phase
 
-    // Set states in one go to prevent re-render issues
+    // Set states first
     setCurrentUser(modUser);
     setCurrentRoom(newRoom);
     setIsModLoginScreen(false);
-    saveRoom(newRoom);
+
+    // Save to storage after a small delay to ensure state updates complete
+    setTimeout(() => {
+      saveRoom(newRoom);
+    }, 50);
   };
 
   // User: Join room with PIN
