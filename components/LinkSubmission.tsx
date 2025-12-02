@@ -16,7 +16,7 @@ export const LinkSubmission: React.FC<LinkSubmissionProps> = ({
     const [url, setUrl] = useState('');
     const [description, setDescription] = useState('');
 
-    const hasSubmitted = room.submissions.some(s => s.userId === currentUser.id);
+    const hasSubmitted = room.submissions?.some(s => s.userId === currentUser.id) || false;
 
     const handleSubmit = () => {
         if (!url.trim()) return;
@@ -26,7 +26,7 @@ export const LinkSubmission: React.FC<LinkSubmissionProps> = ({
     };
 
     if (hasSubmitted) {
-        const userSubmission = room.submissions.find(s => s.userId === currentUser.id);
+        const userSubmission = room.submissions?.find(s => s.userId === currentUser.id);
 
         return (
             <div className="max-w-2xl mx-auto p-4">
