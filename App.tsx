@@ -137,7 +137,7 @@ const App: React.FC = () => {
 
     const updatedRoom = {
       ...currentRoom,
-      submissions: [...currentRoom.submissions, newSubmission]
+      submissions: [...(currentRoom.submissions || []), newSubmission]
     };
 
     saveRoom(updatedRoom);
