@@ -1,0 +1,124 @@
+import { Room, RoomStatus } from '../types';
+import { db } from './firebase';
+import { ref, onValue, set, get } from 'firebase/database';
+
+const ROOMS_REF = 'rooms';
+
+let isOffline = !db;
+
+/**
+ * Subscribe to a specific room's updates
+ */
+export const subscribeToRoom = (roomId: string, callback: (room: Room | null) => void) => {
+    if (isOffline) {
+        // LocalStorage fallback for offline mode
+        const stored = localStorage.getItem(`room_${roomId}`);
+        if (stored) {
+            try {
+                callback(JSON.parse(stored));
+            } catch {
+                callback(null);
+            }
+        } else {
+            callback(null);
+        }
+
+        // Listen for changes
+        const handleStorage = () => {
+            const updated = localStorage.getItem(`room_${roomId}`);
+            if (updated) {
+                try {
+                    callback(JSON.parse(updated));
+                } catch {
+                    callback(null);
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener(`room-update-${roomId}`, handleStorage);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener(`room-update-${roomId}`, handleStorage);
+        };
+    } else {
+        // Firebase real-time listener
+        const roomRef = ref(db, `${ROOMS_REF}/${roomId}`);
+        const unsubscribe = onValue(roomRef, (snapshot) => {
+            const data = snapshot.val();
+            callback(data || null);
+        });
+        return () => unsubscribe();
+    }
+};
+
+/**
+ * Get room by PIN code
+ */
+export const getRoomByPin = async (pin: string): Promise<Room | null> => {
+    if (isOffline) {
+        // Search localStorage for rooms with this PIN
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith('room_')) {
+                const stored = localStorage.getItem(key);
+                if (stored) {
+                    try {
+                        const room: Room = JSON.parse(stored);
+                        if (room.pin === pin) {
+                            return room;
+                        }
+                    } catch { }
+                }
+            }
+        }
+        return null;
+    } else {
+        // Firebase query
+        const roomsRef = ref(db, ROOMS_REF);
+        const snapshot = await get(roomsRef);
+
+        if (snapshot.exists()) {
+            const rooms = snapshot.val();
+            for (const roomId in rooms) {
+                if (rooms[roomId].pin === pin) {
+                    return rooms[roomId];
+                }
+            }
+        }
+        return null;
+    }
+};
+
+/**
+ * Save/update room
+ */
+export const saveRoom = (room: Room) => {
+    const updatedRoom = { ...room, lastUpdated: Date.now() };
+
+    if (isOffline) {
+        localStorage.setItem(`room_${room.id}`, JSON.stringify(updatedRoom));
+        window.dispatchEvent(new Event(`room-update-${room.id}`));
+    } else {
+        const roomRef = ref(db, `${ROOMS_REF}/${room.id}`);
+        set(roomRef, updatedRoom).catch(err => console.error("Firebase room update failed", err));
+    }
+
+    return updatedRoom;
+};
+
+/**
+ * Delete room
+ */
+export const deleteRoom = (roomId: string) => {
+    if (isOffline) {
+        localStorage.removeItem(`room_${roomId}`);
+        window.dispatchEvent(new Event(`room-update-${roomId}`));
+    } else {
+        const roomRef = ref(db, `${ROOMS_REF}/${roomId}`);
+        set(roomRef, null);
+    }
+};
+
+export const isOnlineMode = () => !isOffline;

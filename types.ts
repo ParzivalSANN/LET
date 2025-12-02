@@ -21,6 +21,34 @@ export interface Submission {
   aiCommentary?: string;
 }
 
+export enum RoomStatus {
+  WAITING = 'WAITING',           // Waiting for participants
+  SUBMISSION = 'SUBMISSION',      // Collecting links
+  VOTING = 'VOTING',              // Voting in progress
+  RESULTS = 'RESULTS'             // Show results
+}
+
+export interface Room {
+  id: string;                     // "room_abc123"
+  pin: string;                    // "2847" (4 digits)
+  createdBy: string;              // Moderator user ID
+  createdAt: number;
+  status: RoomStatus;
+  users: User[];
+  submissions: Submission[];
+  currentSubmissionIndex: number;
+  lastUpdated: number;
+}
+
+export const INITIAL_ROOM: Omit<Room, 'id' | 'pin' | 'createdBy' | 'createdAt'> = {
+  status: RoomStatus.WAITING,
+  users: [],
+  submissions: [],
+  currentSubmissionIndex: -1,
+  lastUpdated: Date.now(),
+};
+
+// Legacy - keeping for backward compatibility during migration
 export enum AppStatus {
   LOBBY = 'LOBBY',
   VOTING = 'VOTING',
