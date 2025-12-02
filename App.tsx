@@ -156,6 +156,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleClearAllUsers = () => {
+    if (confirm("⚠️ Tüm kullanıcıları silmek istediğine emin misin? Bu işlem geri alınamaz!")) {
+      const newState: GameState = {
+        ...gameState,
+        users: gameState.users.filter(u => u.isMod), // Keep only moderator
+        submissions: [] // Clear all submissions too
+      };
+      saveState(newState);
+    }
+  };
+
   const handleBackToLobby = () => {
     // Just go back to lobby, keep current user logged in
     const newState: GameState = {
@@ -242,6 +253,7 @@ const App: React.FC = () => {
             onJoin={handleJoin}
             onSubmitLink={handleSubmitLink}
             onStartGame={handleStartGame}
+            onClearAllUsers={handleClearAllUsers}
             isMod={currentUser?.isMod || false}
           />
         )}

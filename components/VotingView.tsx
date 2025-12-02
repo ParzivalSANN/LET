@@ -39,7 +39,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
 
   const handleAiAnalysis = async () => {
     if (currentSubmission.aiCommentary) return;
-    
+
     setIsAiLoading(true);
     const comment = await analyzeLink(currentSubmission.url, currentSubmission.description);
     onUpdateAiComment(currentSubmission.id, comment);
@@ -54,43 +54,49 @@ export const VotingView: React.FC<VotingViewProps> = ({
         <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-500/10 text-indigo-300 rounded-full text-[10px] font-bold mb-4 border border-indigo-500/20 tracking-widest uppercase shadow-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span> Canlı Oylama
         </span>
-        <h2 className="text-5xl font-black text-white mb-2 drop-shadow-lg tracking-tight">
-          {currentSubmission.userName}<span className="text-gray-600 font-light">'in</span> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Seçimi</span>
-        </h2>
+        <div className="space-y-2">
+          <h2 className="text-5xl font-black text-white drop-shadow-lg tracking-tight">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Yarışmacının</span>
+          </h2>
+          <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 drop-shadow-2xl">
+            Link Seçimi
+          </h2>
+          <p className="text-gray-400 text-sm mt-4 font-medium">Bu linke kaç puan veriyorsun?</p>
+        </div>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        
+
         {/* Left: Content Card (8 Cols) */}
         <div className="lg:col-span-8 bg-glass backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative group">
-          
+
           {/* Decorative Elements */}
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[100px] -z-10 group-hover:bg-indigo-600/15 transition-colors duration-700"></div>
-          
+
           <div className="p-10 flex-1 flex flex-col justify-center text-center relative z-10">
-            
+
             <div className="mb-10 transform transition-transform duration-500 hover:scale-105">
-              <a 
-                href={currentSubmission.url} 
-                target="_blank" 
+              <a
+                href={currentSubmission.url}
+                target="_blank"
                 rel="noreferrer"
                 className="inline-flex flex-col items-center gap-4 group/link"
               >
                 <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-3xl border border-white/10 shadow-2xl group-hover/link:shadow-indigo-500/20 group-hover/link:border-indigo-500/30 transition-all relative overflow-hidden">
-                    <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/link:opacity-100 transition-opacity"></div>
-                    <ArrowTopRightOnSquareIcon className="w-16 h-16 text-indigo-400 group-hover/link:text-white transition-colors" />
+                  <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/link:opacity-100 transition-opacity"></div>
+                  <ArrowTopRightOnSquareIcon className="w-16 h-16 text-indigo-400 group-hover/link:text-white transition-colors" />
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-3xl font-bold text-white mt-4 break-all px-4 tracking-tight">
+                  <span className="text-3xl font-bold text-white mt-4 break-all px-4 tracking-tight">
                     {new URL(currentSubmission.url).hostname}
-                    </span>
-                    <span className="text-sm text-indigo-400 font-medium mt-1 opacity-0 translate-y-2 group-hover/link:opacity-100 group-hover/link:translate-y-0 transition-all">
-                        Siteyi Ziyaret Et &rarr;
-                    </span>
+                  </span>
+                  <span className="text-sm text-indigo-400 font-medium mt-1 opacity-0 translate-y-2 group-hover/link:opacity-100 group-hover/link:translate-y-0 transition-all">
+                    Siteyi Ziyaret Et &rarr;
+                  </span>
                 </div>
               </a>
             </div>
-            
+
             {currentSubmission.description && (
               <div className="bg-gray-800/30 backdrop-blur-sm p-8 rounded-3xl border border-white/5 mb-8 mx-auto max-w-2xl relative">
                 <ChatBubbleBottomCenterTextIcon className="w-8 h-8 text-gray-600 absolute -top-4 -left-2 bg-gray-900 rounded-full p-1 border border-gray-700" />
@@ -100,42 +106,42 @@ export const VotingView: React.FC<VotingViewProps> = ({
 
             {/* AI Section */}
             <div className="mt-auto max-w-3xl mx-auto w-full">
-               {!currentSubmission.aiCommentary ? (
-                 isMod ? (
-                   <button 
+              {!currentSubmission.aiCommentary ? (
+                isMod ? (
+                  <button
                     onClick={handleAiAnalysis}
                     disabled={isAiLoading}
                     className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 hover:from-indigo-900/60 hover:to-purple-900/60 text-indigo-200 px-6 py-5 rounded-2xl transition-all border border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.2)] group/btn"
-                   >
-                     {isAiLoading ? (
-                       <span className="animate-pulse flex items-center gap-2 font-bold"><SparklesIcon className="w-6 h-6" /> Yapay Zeka Düşünüyor...</span>
-                     ) : (
-                       <>
+                  >
+                    {isAiLoading ? (
+                      <span className="animate-pulse flex items-center gap-2 font-bold"><SparklesIcon className="w-6 h-6" /> Yapay Zeka Düşünüyor...</span>
+                    ) : (
+                      <>
                         <SparklesIcon className="w-6 h-6 text-indigo-400 group-hover/btn:scale-110 transition-transform" />
                         <span className="font-bold">Gemini AI ile Yorumla</span>
-                       </>
-                     )}
-                   </button>
-                 ) : (
-                   <div className="text-sm text-gray-500 flex items-center justify-center gap-3 bg-black/20 py-4 rounded-2xl border border-white/5">
-                     <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></span>
-                        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75"></span>
-                        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></span>
-                     </div>
-                     Yapay zeka yorumu bekleniyor...
-                   </div>
-                 )
-               ) : (
-                 <div className="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 border border-indigo-400/30 p-6 rounded-2xl relative shadow-xl text-left transform transition-all animate-fade-in hover:scale-[1.01]">
-                    <div className="absolute -top-3 left-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-indigo-900/50">
-                      <SparklesIcon className="w-3.5 h-3.5" /> Gemini Yorumu
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="text-sm text-gray-500 flex items-center justify-center gap-3 bg-black/20 py-4 rounded-2xl border border-white/5">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75"></span>
+                      <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></span>
                     </div>
-                    <p className="text-indigo-100 text-base leading-relaxed mt-2 font-medium">
-                      {currentSubmission.aiCommentary}
-                    </p>
-                 </div>
-               )}
+                    Yapay zeka yorumu bekleniyor...
+                  </div>
+                )
+              ) : (
+                <div className="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 border border-indigo-400/30 p-6 rounded-2xl relative shadow-xl text-left transform transition-all animate-fade-in hover:scale-[1.01]">
+                  <div className="absolute -top-3 left-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-indigo-900/50">
+                    <SparklesIcon className="w-3.5 h-3.5" /> Gemini Yorumu
+                  </div>
+                  <p className="text-indigo-100 text-base leading-relaxed mt-2 font-medium">
+                    {currentSubmission.aiCommentary}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -149,7 +155,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
               </div>
               Puanın Kaç?
             </h3>
-            
+
             <div className="grid grid-cols-2 gap-4 flex-1 content-start">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
                 <button
@@ -157,8 +163,8 @@ export const VotingView: React.FC<VotingViewProps> = ({
                   onClick={() => handleVote(score)}
                   className={`
                     h-14 rounded-xl font-black text-xl transition-all duration-200 transform hover:scale-[1.05] active:scale-95 flex items-center justify-center relative overflow-hidden group
-                    ${selectedScore === score 
-                      ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg ring-2 ring-white/30' 
+                    ${selectedScore === score
+                      ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg ring-2 ring-white/30'
                       : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700 hover:text-white border border-white/5'
                     }
                   `}
@@ -168,17 +174,17 @@ export const VotingView: React.FC<VotingViewProps> = ({
                 </button>
               ))}
             </div>
-            
+
             <div className="mt-8 pt-6 border-t border-white/5 text-center min-h-[60px]">
-               {selectedScore ? (
-                 <div className="animate-bounce-short">
-                    <span className="inline-flex items-center gap-2 text-white font-bold bg-indigo-600 px-6 py-2 rounded-full shadow-lg shadow-indigo-500/30">
+              {selectedScore ? (
+                <div className="animate-bounce-short">
+                  <span className="inline-flex items-center gap-2 text-white font-bold bg-indigo-600 px-6 py-2 rounded-full shadow-lg shadow-indigo-500/30">
                     <StarIcon className="w-5 h-5 text-yellow-300" /> {selectedScore} Puan!
-                    </span>
-                 </div>
-               ) : (
-                 <span className="text-gray-500 text-sm font-medium">Henüz oy vermedin...</span>
-               )}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-gray-500 text-sm font-medium">Henüz oy vermedin...</span>
+              )}
             </div>
           </div>
 
@@ -186,8 +192,8 @@ export const VotingView: React.FC<VotingViewProps> = ({
             <div className="bg-gray-900/90 backdrop-blur-xl p-6 rounded-3xl border border-yellow-500/20 shadow-2xl shadow-black/50">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-sm font-bold text-yellow-500 uppercase tracking-wider flex items-center gap-2">
-                   <ShieldCheckIcon className="w-4 h-4" />
-                   Moderatör Paneli
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  Moderatör Paneli
                 </h3>
                 <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg border border-white/5 font-mono">
                   {Object.keys(currentSubmission.votes).length} Oy Kullanıldı
@@ -195,11 +201,10 @@ export const VotingView: React.FC<VotingViewProps> = ({
               </div>
               <button
                 onClick={isLast ? onFinish : onNext}
-                className={`w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:translate-y-[-2px] active:translate-y-0 ${
-                  isLast 
-                  ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-green-900/30' 
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/30'
-                }`}
+                className={`w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:translate-y-[-2px] active:translate-y-0 ${isLast
+                    ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-green-900/30'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/30'
+                  }`}
               >
                 {isLast ? "Oylamayı Bitir" : "Sıradaki Link"}
                 {isLast ? <StarIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}

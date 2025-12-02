@@ -9,6 +9,7 @@ interface LobbyViewProps {
   onJoin: (name: string, password: string, isMod: boolean) => void;
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: () => void;
+  onClearAllUsers: () => void;
   isMod: boolean;
 }
 
@@ -19,6 +20,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onJoin,
   onSubmitLink,
   onStartGame,
+  onClearAllUsers,
   isMod
 }) => {
   // Login States
@@ -267,6 +269,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       <ArrowRightIcon className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
+                </button>
+
+                <button
+                  onClick={onClearAllUsers}
+                  className="mt-4 w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-xl hover:shadow-red-500/30 flex items-center justify-center gap-3 text-base group"
+                >
+                  <UserGroupIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <span>Tüm Kullanıcıları Sil</span>
                 </button>
               </div>
             ) : (
