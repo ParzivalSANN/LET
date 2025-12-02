@@ -14,7 +14,7 @@ const App: React.FC = () => {
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isOnline, setIsOnline] = useState(false);
-  const [showModLogin, setShowModLogin] = useState(false);
+  const [isModLoginScreen, setIsModLoginScreen] = useState(false);
   const [modEmail, setModEmail] = useState('');
   const [modPassword, setModPassword] = useState('');
   const [error, setError] = useState('');
@@ -69,10 +69,11 @@ const App: React.FC = () => {
     newRoom.users.push(modUser);
     newRoom.status = RoomStatus.SUBMISSION; // Start in submission phase
 
-    saveRoom(newRoom);
-    setCurrentRoom(newRoom);
+    // Set states in one go to prevent re-render issues
     setCurrentUser(modUser);
-    setShowModLogin(false);
+    setCurrentRoom(newRoom);
+    setIsModLoginScreen(false);
+    saveRoom(newRoom);
   };
 
   // User: Join room with PIN
@@ -239,7 +240,7 @@ const App: React.FC = () => {
   };
 
   // Render moderator login
-  if (showModLogin && !currentUser) {
+  if (isModLoginScreen && !currentUser && !currentRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 text-gray-100">
         <div className="bg-glass backdrop-blur-2xl p-8 rounded-3xl border border-white/10 w-full max-w-md">
@@ -276,7 +277,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setShowModLogin(false)}
+            onClick={() => setIsModLoginScreen(false)}
             className="w-full text-gray-400 hover:text-white transition-colors"
           >
             Geri Dön
@@ -292,7 +293,7 @@ const App: React.FC = () => {
       <div className="min-h-screen text-gray-100">
         <RoomCodeEntry
           onJoinRoom={handleJoinRoom}
-          onModeratorLogin={() => setShowModLogin(true)}
+          onModeratorLogin={() => setIsModLoginScreen(true)}
         />
       </div>
     );
