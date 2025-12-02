@@ -283,8 +283,8 @@ const App: React.FC = () => {
     );
   }
 
-  // Render room code entry (for users)
-  if (!currentUser || !currentRoom) {
+  // Render room code entry (for users without room)
+  if (!currentRoom) {
     return (
       <div className="min-h-screen text-gray-100">
         <RoomCodeEntry
