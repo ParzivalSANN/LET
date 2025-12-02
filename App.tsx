@@ -31,6 +31,9 @@ const App: React.FC = () => {
     const unsubscribe = subscribeToRoom(currentRoom.id, (updatedRoom) => {
       if (updatedRoom) {
         setCurrentRoom(updatedRoom);
+      } else {
+        // Room not found or deleted, keep current room (might be just created)
+        console.log('Room not found in subscription, keeping current room');
       }
     });
 
