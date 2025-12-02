@@ -148,12 +148,20 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    resetGame();
-    // Don't reload window in React/SPA context usually, just reset state
-    // But for full cleanup:
     if (confirm("Herkes için oyunu sıfırlamak istediğine emin misin?")) {
-        resetGame();
+      resetGame();
+      setCurrentUser(null);
+      localStorage.removeItem('linkyaris_user_session');
     }
+  };
+
+  const handleBackToLobby = () => {
+    const newState: GameState = {
+      ...gameState,
+      status: AppStatus.LOBBY,
+      currentSubmissionIndex: 0
+    };
+    saveState(newState);
   };
 
   // Render Logic
@@ -162,9 +170,13 @@ const App: React.FC = () => {
       {/* Top Bar */}
       <div className="flex justify-between items-center max-w-7xl mx-auto mb-8 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm">
+          <button 
+            onClick={handleBackToLobby}
+            className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm transition-all hover:scale-110 hover:shadow-[0_0_25px_rgba(99,102,241,0.7)] cursor-pointer"
+            title="Ana sayfaya dön"
+          >
             LY
-          </div>
+          </button>
           <span className="font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 hidden sm:block">LinkYarış</span>
           
           {/* Connection Status Indicator */}
