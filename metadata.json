@@ -1,0 +1,5 @@
+{
+  "name": "LinkYarış",
+  "description": "A real-time link sharing and voting platform where a moderator controls the flow and users vote on submissions. Includes Gemini AI for link analysis.",
+  "requestFramePermissions": []
+}
