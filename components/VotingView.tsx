@@ -147,7 +147,13 @@ export const VotingView: React.FC<VotingViewProps> = ({
                 <ArrowTopRightOnSquareIcon className="w-16 h-16 text-indigo-400 group-hover/link:text-white transition-colors" />
               </div>
               <span className="text-3xl font-bold text-white break-all px-4">
-                {new URL(currentSubmission.url).hostname}
+                {(() => {
+                  try {
+                    return new URL(currentSubmission.url).hostname;
+                  } catch {
+                    return currentSubmission.url || 'Invalid URL';
+                  }
+                })()}
               </span>
               <span className="text-sm text-indigo-400 font-medium">
                 Siteyi Ziyaret Et &rarr;
