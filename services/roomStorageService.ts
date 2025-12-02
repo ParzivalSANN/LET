@@ -11,19 +11,8 @@ let isOffline = !db;
  */
 export const subscribeToRoom = (roomId: string, callback: (room: Room | null) => void) => {
     if (isOffline) {
-        // LocalStorage fallback for offline mode
-        const stored = localStorage.getItem(`room_${roomId}`);
-        if (stored) {
-            try {
-                callback(JSON.parse(stored));
-            } catch {
-                callback(null);
-            }
-        } else {
-            callback(null);
-        }
-
-        // Listen for changes
+        // LocalStorage fallback - only listen to events, don't read initially
+        // This prevents race condition with saveRoom
         const handleStorage = () => {
             const updated = localStorage.getItem(`room_${roomId}`);
             if (updated) {
@@ -99,6 +88,7 @@ export const saveRoom = (room: Room) => {
 
     if (isOffline) {
         localStorage.setItem(`room_${room.id}`, JSON.stringify(updatedRoom));
+        // Dispatch event so subscribeToRoom can pick it up
         window.dispatchEvent(new Event(`room-update-${room.id}`));
     } else {
         const roomRef = ref(db, `${ROOMS_REF}/${room.id}`);
