@@ -29,7 +29,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
 
   // Reset local state when submission changes
   useEffect(() => {
-    setSelectedScore(currentSubmission.votes[currentUser.id] || null);
+    setSelectedScore((currentSubmission.votes || {})[currentUser.id] || null);
   }, [currentSubmission.id, currentUser.id, currentSubmission.votes]);
 
   const handleVote = (score: number) => {
@@ -196,14 +196,14 @@ export const VotingView: React.FC<VotingViewProps> = ({
                   Moderatör Paneli
                 </h3>
                 <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg border border-white/5 font-mono">
-                  {Object.keys(currentSubmission.votes).length} Oy Kullanıldı
+                  {Object.keys(currentSubmission.votes || {}).length} Oy Kullanıldı
                 </span>
               </div>
               <button
                 onClick={isLast ? onFinish : onNext}
                 className={`w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:translate-y-[-2px] active:translate-y-0 ${isLast
-                    ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-green-900/30'
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/30'
+                  ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-green-900/30'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/30'
                   }`}
               >
                 {isLast ? "Oylamayı Bitir" : "Sıradaki Link"}
