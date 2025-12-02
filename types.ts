@@ -3,6 +3,7 @@ export interface User {
   name: string;
   isMod: boolean;
   joinedAt: number;
+  passwordHash: string;
 }
 
 export interface Vote {

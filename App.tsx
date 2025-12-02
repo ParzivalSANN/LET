@@ -25,51 +25,53 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Restore user session from local storage only (independent of game state)
-  useEffect(() => {
-     const storedUser = localStorage.getItem('linkyaris_user_session');
-     if (storedUser) {
-         try {
-             setCurrentUser(JSON.parse(storedUser));
-         } catch (e) {
-             console.error("Failed to restore session");
-         }
-     }
-  }, []);
+  // Simple password hashing (client-side only, not production-ready)
+  const hashPassword = async (password: string): Promise<string> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
 
   // Handlers
-  const handleJoin = (name: string, isMod: boolean = false) => {
+  const handleJoin = async (name: string, password: string, isMod: boolean = false) => {
     const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
-    
-    // Check if user already exists in game state
-    const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
+    const passwordHash = await hashPassword(password);
 
-    let userToSet: User;
+    // Check if user already exists in game state
+    const existingUser = gameState.users.find(u => u.name === finalName);
 
     if (existingUser) {
-      userToSet = existingUser;
+      // User exists, verify password
+      if (existingUser.passwordHash !== passwordHash) {
+        alert('❌ Yanlış şifre! Bu isimle daha önce farklı bir şifre kullanılmış.');
+        return;
+      }
+      // Password correct, login
+      setCurrentUser(existingUser);
     } else {
-      userToSet = {
+      // New user, create account
+      const userToSet: User = {
         id: crypto.randomUUID(),
         name: finalName,
         isMod: isMod,
-        joinedAt: Date.now()
+        joinedAt: Date.now(),
+        passwordHash: passwordHash
       };
-      
+
       const newState = {
         ...gameState,
         users: [...gameState.users, userToSet]
       };
       saveState(newState);
+      setCurrentUser(userToSet);
     }
-
-    setCurrentUser(userToSet);
-    localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
   };
 
   const handleSubmitLink = (url: string, description: string) => {
     if (!currentUser) return;
-    
+
     const newSubmission: Submission = {
       id: crypto.randomUUID(),
       userId: currentUser.id,
@@ -98,7 +100,7 @@ const App: React.FC = () => {
   const handleVote = (score: number) => {
     if (!currentUser) return;
     const currentSub = gameState.submissions[gameState.currentSubmissionIndex];
-    
+
     if (!currentSub) return;
 
     const updatedSub = {
@@ -117,7 +119,7 @@ const App: React.FC = () => {
 
   const handleNextSubmission = () => {
     const nextIndex = gameState.currentSubmissionIndex + 1;
-    
+
     if (nextIndex < gameState.submissions.length) {
       saveState({
         ...gameState,
@@ -134,28 +136,28 @@ const App: React.FC = () => {
   };
 
   const handleUpdateAiComment = (submissionId: string, comment: string) => {
-     const updatedSubmissions = gameState.submissions.map(s => {
-       if (s.id === submissionId) {
-         return { ...s, aiCommentary: comment };
-       }
-       return s;
-     });
-     
-     saveState({
-       ...gameState,
-       submissions: updatedSubmissions
-     });
+    const updatedSubmissions = gameState.submissions.map(s => {
+      if (s.id === submissionId) {
+        return { ...s, aiCommentary: comment };
+      }
+      return s;
+    });
+
+    saveState({
+      ...gameState,
+      submissions: updatedSubmissions
+    });
   };
 
   const handleReset = () => {
     if (confirm("Herkes için oyunu sıfırlamak istediğine emin misin?")) {
       resetGame();
       setCurrentUser(null);
-      localStorage.removeItem('linkyaris_user_session');
     }
   };
 
   const handleBackToLobby = () => {
+    // Just go back to lobby, keep current user logged in
     const newState: GameState = {
       ...gameState,
       status: AppStatus.LOBBY,
@@ -170,7 +172,7 @@ const App: React.FC = () => {
       {/* Top Bar */}
       <div className="flex justify-between items-center max-w-7xl mx-auto mb-8 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleBackToLobby}
             className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm transition-all hover:scale-110 hover:shadow-[0_0_25px_rgba(99,102,241,0.7)] cursor-pointer"
             title="Ana sayfaya dön"
@@ -178,62 +180,62 @@ const App: React.FC = () => {
             LY
           </button>
           <span className="font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 hidden sm:block">LinkYarış</span>
-          
+
           {/* Connection Status Indicator */}
           <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isOnline ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
             {isOnline ? (
-                <>
-                    <WifiIcon className="w-3.5 h-3.5" /> Canlı (Online)
-                </>
+              <>
+                <WifiIcon className="w-3.5 h-3.5" /> Canlı (Online)
+              </>
             ) : (
-                <>
-                    <SignalSlashIcon className="w-3.5 h-3.5" /> Demo (Offline)
-                </>
+              <>
+                <SignalSlashIcon className="w-3.5 h-3.5" /> Demo (Offline)
+              </>
             )}
           </div>
         </div>
-        
+
         {currentUser && (
           <div className="flex items-center gap-4 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
-             <div className="text-gray-200">
-               {currentUser.isMod ? (
-                 <span className="text-yellow-400 font-bold flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-                    </span>
-                    Moderatör Paneli
-                 </span>
-               ) : (
-                 <span className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                   {currentUser.name}
-                 </span>
-               )}
-             </div>
+            <div className="text-gray-200">
+              {currentUser.isMod ? (
+                <span className="text-yellow-400 font-bold flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                  </span>
+                  Moderatör Paneli
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                  {currentUser.name}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       {!isOnline && (
         <div className="max-w-7xl mx-auto mb-6 bg-yellow-900/20 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
-            <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500">
-                <CloudIcon className="w-6 h-6" />
-            </div>
-            <div>
-                <h4 className="font-bold text-yellow-500 text-sm">Offline Mod (Demo)</h4>
-                <p className="text-xs text-yellow-200/70 mt-1">
-                    Şu anda veritabanı bağlantısı yok. Yaptığınız işlemler sadece bu tarayıcıda çalışır. 
-                    Çok oyunculu mod için Netlify Environment Variables ayarlarında Firebase Config bilgilerini girmelisiniz.
-                </p>
-            </div>
+          <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500">
+            <CloudIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="font-bold text-yellow-500 text-sm">Offline Mod (Demo)</h4>
+            <p className="text-xs text-yellow-200/70 mt-1">
+              Şu anda veritabanı bağlantısı yok. Yaptığınız işlemler sadece bu tarayıcıda çalışır.
+              Çok oyunculu mod için Netlify Environment Variables ayarlarında Firebase Config bilgilerini girmelisiniz.
+            </p>
+          </div>
         </div>
       )}
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
         {gameState.status === AppStatus.LOBBY && (
-          <LobbyView 
+          <LobbyView
             currentUser={currentUser}
             users={gameState.users}
             submissions={gameState.submissions}
@@ -245,7 +247,7 @@ const App: React.FC = () => {
         )}
 
         {gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 && currentUser && (
-          <VotingView 
+          <VotingView
             currentSubmission={gameState.submissions[gameState.currentSubmissionIndex]}
             isMod={currentUser.isMod}
             currentUser={currentUser}
@@ -258,7 +260,7 @@ const App: React.FC = () => {
         )}
 
         {gameState.status === AppStatus.RESULTS && (
-          <ResultsView 
+          <ResultsView
             submissions={gameState.submissions}
             onReset={handleReset}
             isMod={currentUser?.isMod || false}
