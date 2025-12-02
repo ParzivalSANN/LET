@@ -24,9 +24,9 @@ const App: React.FC = () => {
     setIsOnline(isOnlineMode());
   }, []);
 
-  // Subscribe to room updates
+  // Subscribe to room updates (only in online mode)
   useEffect(() => {
-    if (!currentRoom) return;
+    if (!currentRoom || !isOnline) return; // Skip subscription in offline mode
 
     const unsubscribe = subscribeToRoom(currentRoom.id, (updatedRoom) => {
       if (updatedRoom) {
@@ -38,7 +38,7 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [currentRoom?.id]);
+  }, [currentRoom?.id, isOnline]);
 
   // Password hashing
   const hashPassword = async (password: string): Promise<string> => {
