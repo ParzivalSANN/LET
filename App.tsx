@@ -385,6 +385,7 @@ const App: React.FC = () => {
             currentSubmission={currentRoom.submissions[currentRoom.currentSubmissionIndex]}
             isMod={currentUser.isMod}
             currentUser={currentUser}
+            allSubmissions={currentRoom.submissions}
             onVote={handleVote}
             onNext={handleNextSubmission}
             onFinish={handleFinishGame}
