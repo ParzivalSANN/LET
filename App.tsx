@@ -50,7 +50,7 @@ const App: React.FC = () => {
   };
 
   // Moderator: Create new room
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     if (modEmail !== 'berkay-34ist@hotmail.com' || modPassword !== '123321') {
       setError('Hatalı e-posta veya şifre!');
       setTimeout(() => setError(''), 3000);
@@ -75,8 +75,8 @@ const App: React.FC = () => {
     setIsModLoginScreen(false);
 
     // Save to storage after a small delay to ensure state updates complete
-    setTimeout(() => {
-      saveRoom(newRoom);
+    setTimeout(async () => {
+      await saveRoom(newRoom);
     }, 50);
   };
 
@@ -103,6 +103,8 @@ const App: React.FC = () => {
         alert('❌ Yanlış şifre! Bu isimle farklı bir şifre kullanılmış.');
         return;
       }
+
+      // User exists and password is correct - set them as current user
       setCurrentUser(existingUser);
       setCurrentRoom(room);
     } else {
@@ -116,14 +118,14 @@ const App: React.FC = () => {
       };
 
       room.users.push(newUser);
-      saveRoom(room);
+      await saveRoom(room);
       setCurrentUser(newUser);
       setCurrentRoom(room);
     }
   };
 
   // Submit link
-  const handleSubmitLink = (url: string, description: string) => {
+  const handleSubmitLink = async (url: string, description: string) => {
     if (!currentRoom || !currentUser) return;
 
     const newSubmission: Submission = {
@@ -140,15 +142,24 @@ const App: React.FC = () => {
       submissions: [...(currentRoom.submissions || []), newSubmission]
     };
 
-    saveRoom(updatedRoom);
+    await saveRoom(updatedRoom);
   };
 
   // Start voting
   const handleStartVoting = () => {
     if (!currentRoom) return;
 
+    // Get list of user IDs who have submitted links
+    const submittedUserIds = new Set(currentRoom.submissions.map(s => s.userId));
+
+    // Keep only moderators and users who have submitted
+    const activeUsers = currentRoom.users.filter(u =>
+      u.isMod || submittedUserIds.has(u.id)
+    );
+
     const updatedRoom = {
       ...currentRoom,
+      users: activeUsers, // Remove users without submissions
       status: RoomStatus.VOTING,
       currentSubmissionIndex: 0
     };
@@ -157,7 +168,7 @@ const App: React.FC = () => {
   };
 
   // Vote
-  const handleVote = (score: number) => {
+  const handleVote = async (score: number) => {
     if (!currentRoom || !currentUser) return;
 
     const currentSub = currentRoom.submissions[currentRoom.currentSubmissionIndex];
@@ -176,11 +187,11 @@ const App: React.FC = () => {
       submissions: updatedSubmissions
     };
 
-    saveRoom(updatedRoom);
+    await saveRoom(updatedRoom);
   };
 
   // Next submission
-  const handleNextSubmission = () => {
+  const handleNextSubmission = async () => {
     if (!currentRoom) return;
 
     const nextIndex = currentRoom.currentSubmissionIndex + 1;
@@ -190,12 +201,12 @@ const App: React.FC = () => {
         ...currentRoom,
         currentSubmissionIndex: nextIndex
       };
-      saveRoom(updatedRoom);
+      await saveRoom(updatedRoom);
     }
   };
 
   // Finish game
-  const handleFinishGame = () => {
+  const handleFinishGame = async () => {
     if (!currentRoom) return;
 
     const updatedRoom = {
@@ -203,11 +214,11 @@ const App: React.FC = () => {
       status: RoomStatus.RESULTS
     };
 
-    saveRoom(updatedRoom);
+    await saveRoom(updatedRoom);
   };
 
   // Update AI comment
-  const handleUpdateAiComment = (submissionId: string, comment: string) => {
+  const handleUpdateAiComment = async (submissionId: string, comment: string) => {
     if (!currentRoom) return;
 
     const updatedSubmissions = currentRoom.submissions.map(s =>
@@ -219,7 +230,7 @@ const App: React.FC = () => {
       submissions: updatedSubmissions
     };
 
-    saveRoom(updatedRoom);
+    await saveRoom(updatedRoom);
   };
 
   // Cancel room
@@ -231,7 +242,7 @@ const App: React.FC = () => {
   };
 
   // Back to lobby (for mod)
-  const handleBackToLobby = () => {
+  const handleBackToLobby = async () => {
     if (!currentRoom) return;
 
     const updatedRoom = {
@@ -240,7 +251,7 @@ const App: React.FC = () => {
       currentSubmissionIndex: 0
     };
 
-    saveRoom(updatedRoom);
+    await saveRoom(updatedRoom);
   };
 
   // Render moderator login

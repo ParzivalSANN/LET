@@ -6,6 +6,25 @@ const ROOMS_REF = 'rooms';
 
 let isOffline = !db;
 
+// Simple locking mechanism for localStorage to prevent race conditions
+const locks = new Map<string, boolean>();
+
+const acquireLock = async (key: string, maxRetries = 10): Promise<boolean> => {
+    for (let i = 0; i < maxRetries; i++) {
+        if (!locks.get(key)) {
+            locks.set(key, true);
+            return true;
+        }
+        // Wait with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.min(50 * Math.pow(2, i), 500)));
+    }
+    return false;
+};
+
+const releaseLock = (key: string) => {
+    locks.delete(key);
+};
+
 /**
  * Subscribe to a specific room's updates
  */
@@ -39,6 +58,28 @@ export const subscribeToRoom = (roomId: string, callback: (room: Room | null) =>
             callback(data || null);
         });
         return () => unsubscribe();
+    }
+};
+
+/**
+ * Get room by ID
+ */
+export const getRoomById = async (roomId: string): Promise<Room | null> => {
+    if (isOffline) {
+        const stored = localStorage.getItem(`room_${roomId}`);
+        if (stored) {
+            try {
+                return JSON.parse(stored);
+            } catch (error) {
+                console.error(`Failed to parse room ${roomId}:`, error);
+                return null;
+            }
+        }
+        return null;
+    } else {
+        const roomRef = ref(db, `${ROOMS_REF}/${roomId}`);
+        const snapshot = await get(roomRef);
+        return snapshot.exists() ? snapshot.val() : null;
     }
 };
 
@@ -83,13 +124,27 @@ export const getRoomByPin = async (pin: string): Promise<Room | null> => {
 /**
  * Save/update room
  */
-export const saveRoom = (room: Room) => {
+export const saveRoom = async (room: Room) => {
     const updatedRoom = { ...room, lastUpdated: Date.now() };
 
     if (isOffline) {
-        localStorage.setItem(`room_${room.id}`, JSON.stringify(updatedRoom));
-        // Dispatch event so subscribeToRoom can pick it up
-        window.dispatchEvent(new Event(`room-update-${room.id}`));
+        const lockKey = `room_${room.id}`;
+        const acquired = await acquireLock(lockKey);
+
+        if (!acquired) {
+            console.error(`Failed to acquire lock for room ${room.id}`);
+            return updatedRoom;
+        }
+
+        try {
+            localStorage.setItem(lockKey, JSON.stringify(updatedRoom));
+            // Dispatch event so subscribeToRoom can pick it up
+            window.dispatchEvent(new Event(`room-update-${room.id}`));
+        } catch (error) {
+            console.error("Failed to save room to localStorage:", error);
+        } finally {
+            releaseLock(lockKey);
+        }
     } else {
         const roomRef = ref(db, `${ROOMS_REF}/${room.id}`);
         set(roomRef, updatedRoom).catch(err => console.error("Firebase room update failed", err));
