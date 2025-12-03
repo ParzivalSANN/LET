@@ -28,8 +28,15 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentRoom || !isOnline) return; // Skip subscription in offline mode
 
+    console.log('Setting up subscription for room:', currentRoom.id);
+
     const unsubscribe = subscribeToRoom(currentRoom.id, (updatedRoom) => {
       if (updatedRoom) {
+        console.log('Room update received:', {
+          status: updatedRoom.status,
+          users: updatedRoom.users?.length,
+          submissions: updatedRoom.submissions?.length
+        });
         setCurrentRoom(updatedRoom);
       } else {
         // Room not found or deleted, keep current room (might be just created)
@@ -209,12 +216,16 @@ const App: React.FC = () => {
   const handleFinishGame = async () => {
     if (!currentRoom) return;
 
+    console.log('Finishing game, current status:', currentRoom.status);
+
     const updatedRoom = {
       ...currentRoom,
       status: RoomStatus.RESULTS
     };
 
+    console.log('Setting status to RESULTS');
     await saveRoom(updatedRoom);
+    console.log('Room saved with RESULTS status');
   };
 
   // Update AI comment
@@ -406,11 +417,18 @@ const App: React.FC = () => {
         )}
 
         {currentRoom.status === RoomStatus.RESULTS && (
-          <ResultsView
-            submissions={currentRoom.submissions}
-            onReset={handleCancelRoom}
-            isMod={currentUser.isMod}
-          />
+          <>
+            {console.log('Rendering RESULTS:', {
+              status: currentRoom.status,
+              submissionsCount: currentRoom.submissions?.length,
+              isMod: currentUser.isMod
+            })}
+            <ResultsView
+              submissions={currentRoom.submissions || []}
+              onReset={handleCancelRoom}
+              isMod={currentUser.isMod}
+            />
+          </>
         )}
       </main>
     </div>

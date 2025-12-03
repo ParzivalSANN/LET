@@ -34,9 +34,12 @@ export const subscribeToRoom = (roomId: string, callback: (room: Room | null) =>
         // This prevents race condition with saveRoom
         const handleStorage = () => {
             const updated = localStorage.getItem(`room_${roomId}`);
+            console.log('[SUB] Event triggered for room:', roomId, 'hasData:', !!updated);
             if (updated) {
                 try {
-                    callback(JSON.parse(updated));
+                    const room = JSON.parse(updated);
+                    console.log('[SUB] Callback with status:', room.status);
+                    callback(room);
                 } catch {
                     callback(null);
                 }
@@ -138,8 +141,10 @@ export const saveRoom = async (room: Room) => {
 
         try {
             localStorage.setItem(lockKey, JSON.stringify(updatedRoom));
+            console.log('[SAVE] Room saved:', { id: room.id, status: updatedRoom.status });
             // Dispatch event so subscribeToRoom can pick it up
             window.dispatchEvent(new Event(`room-update-${room.id}`));
+            console.log('[SAVE] Event dispatched');
         } catch (error) {
             console.error("Failed to save room to localStorage:", error);
         } finally {

@@ -49,8 +49,8 @@ export const VotingView: React.FC<VotingViewProps> = ({
     if (isMod) return; // Moderators don't auto-advance
     if (currentSubmission.userId === currentUser.id) {
       // Skip own submission
-      setTimeout(() => onNext(), 500);
-      return;
+      const timer = setTimeout(() => onNext(), 500);
+      return () => clearTimeout(timer);
     }
 
     const hasVoted = (currentSubmission.votes || {})[currentUser.id] !== undefined;
@@ -61,7 +61,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [currentSubmission.id, selectedScore, isMod, isLast, currentUser.id, currentSubmission.userId]);
+  }, [currentSubmission.id, currentSubmission.votes, currentSubmission.userId, isMod, isLast, currentUser.id, onNext]);
 
   const handleVote = (score: number) => {
     setSelectedScore(score);
