@@ -57,7 +57,12 @@ const App: React.FC = () => {
              return false;
          }
       }
-      userToSet = existingUser;
+      
+      // CRITICAL FIX: Ensure no undefined fields are carried over from legacy corrupted data
+      userToSet = {
+        ...existingUser,
+        password: existingUser.password || "" 
+      };
     } else {
       // Create new user
       userToSet = {

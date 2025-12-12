@@ -47,7 +47,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     const cleanEmail = email.trim().toLowerCase();
     
     if (cleanEmail === 'berkay-34ist@hotmail.com' && password === '123321') {
-      const success = onJoin('Moderatör', undefined, true);
+      // FIX: Pass empty string "" instead of undefined to ensure strict type safety for Firebase
+      const success = onJoin('Moderatör', "", true);
       if (!success) setError("Giriş başarısız. Oturum hatası.");
     } else {
       setError('Hatalı e-posta veya şifre!');

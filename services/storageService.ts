@@ -21,6 +21,12 @@ const sanitizeState = (state: any): GameState => {
     url: sub.url || "https://example.com" // CRITICAL FIX: Ensure URL is never null
   }));
 
+  // Sanitize users to ensure password is strictly a string (or empty string), never undefined
+  const sanitizedUsers = (state.users || []).map((user: any) => ({
+    ...user,
+    password: user.password || "" // CRITICAL FIX: Firebase throws if this is undefined
+  }));
+
   // Sanitize currentSubmissionIndex
   let index = state.currentSubmissionIndex;
   if (typeof index !== 'number') index = -1;
@@ -28,7 +34,7 @@ const sanitizeState = (state: any): GameState => {
   return {
     ...INITIAL_STATE,
     ...state,
-    users: state.users || [],
+    users: sanitizedUsers, // Use sanitized users
     submissions: sanitizedSubmissions,
     currentSubmissionIndex: index,
     settings: { ...INITIAL_STATE.settings, ...(state.settings || {}) }
@@ -97,7 +103,11 @@ export const saveState = (state: GameState) => {
     window.dispatchEvent(new Event('local-storage-update'));
   } else {
     const gameRef = ref(db, DB_REF);
-    set(gameRef, newState).catch(err => console.error("Firebase update failed", err));
+    // Explicitly catching write errors to prevent UI crashes, though this is async
+    set(gameRef, newState).catch(err => {
+        console.error("Firebase update failed:", err);
+        // If it failed due to undefined, we might want to alert the user, but console error is best we can do in async void
+    });
   }
   
   return newState;
