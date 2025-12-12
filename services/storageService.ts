@@ -1,6 +1,6 @@
-import { GameState, INITIAL_STATE } from '../types';
+import { GameState, INITIAL_STATE, User } from '../types';
 import { db } from './firebase';
-import { ref, onValue, set, off, get, child } from 'firebase/database';
+import { ref, onValue, set, off, get, child, runTransaction } from 'firebase/database';
 
 const STORAGE_KEY_PREFIX = 'linkyaris_gamestate_';
 
@@ -65,6 +65,54 @@ export const doesRoomExist = async (roomId: string): Promise<boolean> => {
   }
 };
 
+/**
+ * Safely adds a user to the game using Transactions to prevent race conditions.
+ */
+export const addUserToGame = async (roomId: string, user: User): Promise<void> => {
+    const dbPath = `games/${roomId}/users`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        // Safe Local Storage Update
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        
+        // Check for duplicates in local state
+        const exists = currentState.users.some((u: User) => u.id === user.id || (u.name === user.name && u.isMod === user.isMod));
+        
+        if (!exists) {
+            currentState.users = [...currentState.users, user];
+            localStorage.setItem(localKey, JSON.stringify(currentState));
+            window.dispatchEvent(new Event('local-storage-update'));
+        }
+    } else {
+        // Safe Firebase Transaction
+        const usersRef = ref(db, dbPath);
+        
+        try {
+            await runTransaction(usersRef, (currentUsers) => {
+                if (currentUsers === null) {
+                    return [user]; // Initialize if empty
+                }
+                
+                // Check if user already exists (by ID or Name+Role)
+                const exists = currentUsers.some((u: any) => u.id === user.id || (u.name === user.name && u.isMod === user.isMod));
+                
+                if (exists) {
+                    // Abort transaction, user already there (or let it fail silently as success)
+                    return; 
+                }
+
+                // Append user
+                return [...currentUsers, user];
+            });
+        } catch (error) {
+            console.error("Transaction failed: ", error);
+            throw error;
+        }
+    }
+};
+
 export const subscribeToGame = (roomId: string, callback: (state: GameState) => void) => {
   // Unsubscribe from previous if exists
   if (currentRef && !isOffline) {
@@ -118,7 +166,8 @@ export const subscribeToGame = (roomId: string, callback: (state: GameState) => 
         callback(sanitizeState(data));
       } else {
         // Initialize DB if empty for this room
-        set(gameRef, INITIAL_STATE);
+        // NOTE: We don't automatically set INITIAL_STATE here to avoid overwriting if a transaction is in progress
+        // Just callback with initial state, let the first write handle it.
         callback(INITIAL_STATE);
       }
     });

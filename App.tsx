@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_STATE, GameState, AppStatus, User, Submission } from './types';
-import { subscribeToGame, saveState, resetGame, isOnlineMode, doesRoomExist } from './services/storageService';
+import { subscribeToGame, saveState, resetGame, isOnlineMode, doesRoomExist, addUserToGame } from './services/storageService';
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
@@ -64,23 +64,29 @@ const App: React.FC = () => {
   useEffect(() => {
     if (pendingLogin && gameState && roomId) {
         // Try to join now that we have state
-        const success = executeJoin(pendingLogin.name, pendingLogin.password, pendingLogin.isMod);
-        if (success) {
-            setPendingLogin(null); // Clear pending
-            setLoginError('');
-        } else {
-            setPendingLogin(null);
-            setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
-        }
+        // We use an async wrapper inside useEffect
+        const tryJoin = async () => {
+            const success = await executeJoin(pendingLogin.name, pendingLogin.password, pendingLogin.isMod);
+            if (success) {
+                setPendingLogin(null); // Clear pending
+                setLoginError('');
+            } else {
+                setPendingLogin(null);
+                setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
+            }
+        };
+        tryJoin();
     }
   }, [gameState, pendingLogin, roomId]);
 
 
   // Actual Logic to Modify State
-  const executeJoin = (name: string, password?: string, isMod: boolean = false): boolean => {
+  const executeJoin = async (name: string, password?: string, isMod: boolean = false): Promise<boolean> => {
       if (!roomId) return false;
 
       const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
+      
+      // Check existing in LOCAL state for login validation
       const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
       let userToSet: User;
   
@@ -93,8 +99,9 @@ const App: React.FC = () => {
            }
         }
         userToSet = { ...existingUser, password: existingUser.password || "" };
+        // If user exists, we just set the session locally, no need to write to DB
       } else {
-        // If mod, allow creation anytime. If user, ensure name isn't taken by a different type
+        // If mod, allow creation anytime. If user, ensure name isn't taken by a different type locally first
         if (gameState.users.some(u => u.name === finalName)) return false;
 
         userToSet = {
@@ -105,13 +112,13 @@ const App: React.FC = () => {
           password: password || ""
         };
         
-        // Sadece kullanıcı zaten varsa veya moderatörse kaydediyoruz.
-        // Ancak subscribeToGame zaten odayı oluşturmuş olabilir, burada kullanıcıyı ekliyoruz.
-        const newState = {
-          ...gameState,
-          users: [...gameState.users, userToSet]
-        };
-        saveState(roomId, newState);
+        // SAFE JOIN: Use transaction to add user to DB
+        try {
+            await addUserToGame(roomId, userToSet);
+        } catch (e) {
+            console.error("Failed to join room:", e);
+            return false;
+        }
       }
   
       setCurrentUser(userToSet);
@@ -141,7 +148,7 @@ const App: React.FC = () => {
 
       // Eğer zaten bu odadaysak direkt katılmayı dene
       if (roomId === cleanRoom) {
-          const success = executeJoin(name, password, isMod);
+          const success = await executeJoin(name, password, isMod);
           if (!success) {
              setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
           }
