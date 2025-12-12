@@ -49,7 +49,10 @@ const App: React.FC = () => {
     if (existingUser) {
       // If user exists, verify password (if not mod) to allow reconnection
       if (!isMod) {
-         if (existingUser.password !== password) {
+         // Handle potential undefined password in existing user (legacy data)
+         const storedPassword = existingUser.password || "";
+         const inputPassword = password || "";
+         if (storedPassword !== inputPassword) {
              // Password mismatch
              return false;
          }
@@ -62,7 +65,8 @@ const App: React.FC = () => {
         name: finalName,
         isMod: isMod,
         joinedAt: Date.now(),
-        password: password
+        // CRITICAL FIX: Firebase throws error if value is undefined. Use empty string instead.
+        password: password || ""
       };
       
       const newState = {
