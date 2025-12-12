@@ -3,12 +3,11 @@ export interface User {
   name: string;
   isMod: boolean;
   joinedAt: number;
-  passwordHash: string;
 }
 
 export interface Vote {
   userId: string;
-  score: number; // 1-10
+  score: number; // 1-10, 0 means timeout/skip
 }
 
 export interface Submission {
@@ -21,38 +20,14 @@ export interface Submission {
   aiCommentary?: string;
 }
 
-export enum RoomStatus {
-  WAITING = 'WAITING',           // Waiting for participants
-  SUBMISSION = 'SUBMISSION',      // Collecting links
-  VOTING = 'VOTING',              // Voting in progress
-  RESULTS = 'RESULTS'             // Show results
-}
-
-export interface Room {
-  id: string;                     // "room_abc123"
-  pin: string;                    // "2847" (4 digits)
-  createdBy: string;              // Moderator user ID
-  createdAt: number;
-  status: RoomStatus;
-  users: User[];
-  submissions: Submission[];
-  currentSubmissionIndex: number;
-  lastUpdated: number;
-}
-
-export const INITIAL_ROOM: Omit<Room, 'id' | 'pin' | 'createdBy' | 'createdAt'> = {
-  status: RoomStatus.WAITING,
-  users: [],
-  submissions: [],
-  currentSubmissionIndex: -1,
-  lastUpdated: Date.now(),
-};
-
-// Legacy - keeping for backward compatibility during migration
 export enum AppStatus {
   LOBBY = 'LOBBY',
   VOTING = 'VOTING',
   RESULTS = 'RESULTS'
+}
+
+export interface GameSettings {
+  timerDuration: number; // saniye cinsinden
 }
 
 export interface GameState {
@@ -61,6 +36,8 @@ export interface GameState {
   submissions: Submission[];
   currentSubmissionIndex: number;
   lastUpdated: number;
+  settings: GameSettings;
+  roundEndTime: number; // Timestamp for when the current round ends
 }
 
 export const INITIAL_STATE: GameState = {
@@ -69,4 +46,8 @@ export const INITIAL_STATE: GameState = {
   submissions: [],
   currentSubmissionIndex: -1,
   lastUpdated: Date.now(),
+  settings: {
+    timerDuration: 30 // Varsayılan 30 saniye
+  },
+  roundEndTime: 0
 };

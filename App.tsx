@@ -1,140 +1,75 @@
 import React, { useState, useEffect } from 'react';
-import { Room, RoomStatus, User, Submission } from './types';
-import { createRoom } from './services/roomService';
-import { subscribeToRoom, getRoomByPin, saveRoom, isOnlineMode } from './services/roomStorageService';
-import { RoomCodeEntry } from './components/RoomCodeEntry';
-import { WaitingRoom } from './components/WaitingRoom';
-import { LinkSubmission } from './components/LinkSubmission';
+import { INITIAL_STATE, GameState, AppStatus, User, Submission } from './types';
+import { subscribeToGame, saveState, resetGame, isOnlineMode } from './services/storageService';
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
-import { WifiIcon, SignalSlashIcon } from '@heroicons/react/24/outline';
+import { CloudIcon, WifiIcon, SignalSlashIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
-  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isOnline, setIsOnline] = useState(false);
-  const [isModLoginScreen, setIsModLoginScreen] = useState(false);
-  const [modEmail, setModEmail] = useState('');
-  const [modPassword, setModPassword] = useState('');
-  const [error, setError] = useState('');
 
-  // Check online status
+  // Sync state from Storage Service (Firebase or LocalStorage)
   useEffect(() => {
     setIsOnline(isOnlineMode());
-  }, []);
 
-  // Subscribe to room updates (only in online mode)
-  useEffect(() => {
-    if (!currentRoom || !isOnline) return; // Skip subscription in offline mode
-
-    console.log('Setting up subscription for room:', currentRoom.id);
-
-    const unsubscribe = subscribeToRoom(currentRoom.id, (updatedRoom) => {
-      if (updatedRoom) {
-        console.log('Room update received:', {
-          status: updatedRoom.status,
-          users: updatedRoom.users?.length,
-          submissions: updatedRoom.submissions?.length
-        });
-        setCurrentRoom(updatedRoom);
-      } else {
-        // Room not found or deleted, keep current room (might be just created)
-        console.log('Room not found in subscription, keeping current room');
-      }
+    // Subscribe to changes
+    const unsubscribe = subscribeToGame((newState) => {
+      setGameState(newState);
     });
 
-    return () => unsubscribe();
-  }, [currentRoom?.id, isOnline]);
-
-  // Password hashing
-  const hashPassword = async (password: string): Promise<string> => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  // Moderator: Create new room
-  const handleCreateRoom = async () => {
-    if (modEmail !== 'berkay-34ist@hotmail.com' || modPassword !== '123321') {
-      setError('Hatalı e-posta veya şifre!');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-
-    const modUser: User = {
-      id: crypto.randomUUID(),
-      name: 'Moderatör (Berkay)',
-      isMod: true,
-      joinedAt: Date.now(),
-      passwordHash: '' // Mods don't need password hash stored in room
+    return () => {
+      unsubscribe();
     };
+  }, []);
 
-    const newRoom = createRoom(modUser.id);
-    newRoom.users.push(modUser);
-    newRoom.status = RoomStatus.SUBMISSION; // Start in submission phase
+  // Restore user session from local storage only (independent of game state)
+  useEffect(() => {
+     const storedUser = localStorage.getItem('linkyaris_user_session');
+     if (storedUser) {
+         try {
+             setCurrentUser(JSON.parse(storedUser));
+         } catch (e) {
+             console.error("Failed to restore session");
+         }
+     }
+  }, []);
 
-    // Set states first
-    setCurrentUser(modUser);
-    setCurrentRoom(newRoom);
-    setIsModLoginScreen(false);
+  // Handlers
+  const handleJoin = (name: string, isMod: boolean = false) => {
+    const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
+    
+    // Check if user already exists in game state
+    const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
 
-    // Save to storage after a small delay to ensure state updates complete
-    setTimeout(async () => {
-      await saveRoom(newRoom);
-    }, 50);
-  };
-
-  // User: Join room with PIN
-  const handleJoinRoom = async (pin: string, name: string, password: string) => {
-    const room = await getRoomByPin(pin);
-
-    if (!room) {
-      alert('❌ Oda bulunamadı! Kodu kontrol et.');
-      return;
-    }
-
-    if (room.status !== RoomStatus.SUBMISSION) {
-      alert('⚠️ Bu oda şu an katılıma kapalı.');
-      return;
-    }
-
-    const passwordHash = await hashPassword(password);
-    const existingUser = room.users.find(u => u.name === name);
+    let userToSet: User;
 
     if (existingUser) {
-      // Verify password
-      if (existingUser.passwordHash !== passwordHash) {
-        alert('❌ Yanlış şifre! Bu isimle farklı bir şifre kullanılmış.');
-        return;
-      }
-
-      // User exists and password is correct - set them as current user
-      setCurrentUser(existingUser);
-      setCurrentRoom(room);
+      userToSet = existingUser;
     } else {
-      // Create new user
-      const newUser: User = {
+      userToSet = {
         id: crypto.randomUUID(),
-        name,
-        isMod: false,
-        joinedAt: Date.now(),
-        passwordHash
+        name: finalName,
+        isMod: isMod,
+        joinedAt: Date.now()
       };
-
-      room.users.push(newUser);
-      await saveRoom(room);
-      setCurrentUser(newUser);
-      setCurrentRoom(room);
+      
+      const newState = {
+        ...gameState,
+        users: [...gameState.users, userToSet]
+      };
+      saveState(newState);
     }
+
+    setCurrentUser(userToSet);
+    localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
   };
 
-  // Submit link
-  const handleSubmitLink = async (url: string, description: string) => {
-    if (!currentRoom || !currentUser) return;
-
+  const handleSubmitLink = (url: string, description: string) => {
+    if (!currentUser) return;
+    
     const newSubmission: Submission = {
       id: crypto.randomUUID(),
       userId: currentUser.id,
@@ -144,41 +79,31 @@ const App: React.FC = () => {
       votes: {}
     };
 
-    const updatedRoom = {
-      ...currentRoom,
-      submissions: [...(currentRoom.submissions || []), newSubmission]
+    const newState = {
+      ...gameState,
+      submissions: [...gameState.submissions, newSubmission]
     };
-
-    await saveRoom(updatedRoom);
+    saveState(newState);
   };
 
-  // Start voting
-  const handleStartVoting = () => {
-    if (!currentRoom) return;
-
-    // Get list of user IDs who have submitted links
-    const submittedUserIds = new Set(currentRoom.submissions.map(s => s.userId));
-
-    // Keep only moderators and users who have submitted
-    const activeUsers = currentRoom.users.filter(u =>
-      u.isMod || submittedUserIds.has(u.id)
-    );
-
-    const updatedRoom = {
-      ...currentRoom,
-      users: activeUsers, // Remove users without submissions
-      status: RoomStatus.VOTING,
-      currentSubmissionIndex: 0
+  const handleStartGame = (duration: number) => {
+    const newState: GameState = {
+      ...gameState,
+      status: AppStatus.VOTING,
+      currentSubmissionIndex: 0,
+      settings: {
+        timerDuration: duration
+      },
+      // Calculate end time for the first round
+      roundEndTime: Date.now() + (duration * 1000)
     };
-
-    saveRoom(updatedRoom);
+    saveState(newState);
   };
 
-  // Vote
-  const handleVote = async (score: number) => {
-    if (!currentRoom || !currentUser) return;
-
-    const currentSub = currentRoom.submissions[currentRoom.currentSubmissionIndex];
+  const handleVote = (score: number) => {
+    if (!currentUser) return;
+    const currentSub = gameState.submissions[gameState.currentSubmissionIndex];
+    
     if (!currentSub) return;
 
     const updatedSub = {
@@ -186,249 +111,168 @@ const App: React.FC = () => {
       votes: { ...currentSub.votes, [currentUser.id]: score }
     };
 
-    const updatedSubmissions = [...currentRoom.submissions];
-    updatedSubmissions[currentRoom.currentSubmissionIndex] = updatedSub;
+    const updatedSubmissions = [...gameState.submissions];
+    updatedSubmissions[gameState.currentSubmissionIndex] = updatedSub;
 
-    const updatedRoom = {
-      ...currentRoom,
+    saveState({
+      ...gameState,
       submissions: updatedSubmissions
-    };
-
-    await saveRoom(updatedRoom);
+    });
   };
 
-  // Next submission
-  const handleNextSubmission = async () => {
-    if (!currentRoom) return;
-
-    const nextIndex = currentRoom.currentSubmissionIndex + 1;
-
-    if (nextIndex < currentRoom.submissions.length) {
-      const updatedRoom = {
-        ...currentRoom,
-        currentSubmissionIndex: nextIndex
-      };
-      await saveRoom(updatedRoom);
+  const handleNextSubmission = () => {
+    const nextIndex = gameState.currentSubmissionIndex + 1;
+    
+    if (nextIndex < gameState.submissions.length) {
+      saveState({
+        ...gameState,
+        currentSubmissionIndex: nextIndex,
+        // Reset timer for next round
+        roundEndTime: Date.now() + (gameState.settings.timerDuration * 1000)
+      });
     }
   };
 
-  // Finish game
-  const handleFinishGame = async () => {
-    if (!currentRoom) return;
-
-    console.log('Finishing game, current status:', currentRoom.status);
-
-    const updatedRoom = {
-      ...currentRoom,
-      status: RoomStatus.RESULTS
-    };
-
-    console.log('Setting status to RESULTS');
-    await saveRoom(updatedRoom);
-    console.log('Room saved with RESULTS status');
+  const handleFinishGame = () => {
+    saveState({
+      ...gameState,
+      status: AppStatus.RESULTS
+    });
   };
 
-  // Update AI comment
-  const handleUpdateAiComment = async (submissionId: string, comment: string) => {
-    if (!currentRoom) return;
-
-    const updatedSubmissions = currentRoom.submissions.map(s =>
-      s.id === submissionId ? { ...s, aiCommentary: comment } : s
-    );
-
-    const updatedRoom = {
-      ...currentRoom,
-      submissions: updatedSubmissions
-    };
-
-    await saveRoom(updatedRoom);
+  const handleUpdateAiComment = (submissionId: string, comment: string) => {
+     const updatedSubmissions = gameState.submissions.map(s => {
+       if (s.id === submissionId) {
+         return { ...s, aiCommentary: comment };
+       }
+       return s;
+     });
+     
+     saveState({
+       ...gameState,
+       submissions: updatedSubmissions
+     });
   };
 
-  // Cancel room
-  const handleCancelRoom = () => {
-    if (confirm('Yarışmayı iptal etmek istediğine emin misin?')) {
-      setCurrentRoom(null);
-      setCurrentUser(null);
+  const handleReset = () => {
+    if (confirm("Herkes için oyunu sıfırlamak istediğine emin misin?")) {
+        resetGame();
     }
   };
 
-  // Back to lobby (for mod)
-  const handleBackToLobby = async () => {
-    if (!currentRoom) return;
-
-    const updatedRoom = {
-      ...currentRoom,
-      status: RoomStatus.SUBMISSION,
-      currentSubmissionIndex: 0
-    };
-
-    await saveRoom(updatedRoom);
+  // Sign out handler
+  const handleSignOut = () => {
+    localStorage.removeItem('linkyaris_user_session');
+    setCurrentUser(null);
   };
 
-  // Render moderator login
-  if (isModLoginScreen && !currentUser && !currentRoom) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 text-gray-100">
-        <div className="bg-glass backdrop-blur-2xl p-8 rounded-3xl border border-white/10 w-full max-w-md">
-          <h2 className="text-3xl font-bold text-white mb-6">Moderatör Girişi</h2>
-
-          <div className="space-y-4 mb-6">
-            <input
-              type="email"
-              value={modEmail}
-              onChange={(e) => setModEmail(e.target.value)}
-              placeholder="E-posta"
-              className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-            <input
-              type="password"
-              value={modPassword}
-              onChange={(e) => setModPassword(e.target.value)}
-              placeholder="Şifre"
-              className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-          </div>
-
-          {error && (
-            <div className="text-red-400 text-sm bg-red-900/20 p-3 rounded-xl mb-4 text-center">
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handleCreateRoom}
-            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition-all mb-4"
-          >
-            Yeni Yarışma Başlat
-          </button>
-
-          <button
-            onClick={() => setIsModLoginScreen(false)}
-            className="w-full text-gray-400 hover:text-white transition-colors"
-          >
-            Geri Dön
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render room code entry (for users without room)
-  if (!currentRoom) {
-    return (
-      <div className="min-h-screen text-gray-100">
-        <RoomCodeEntry
-          onJoinRoom={handleJoinRoom}
-          onModeratorLogin={() => setIsModLoginScreen(true)}
-        />
-      </div>
-    );
-  }
-
-  // Render main app content
+  // Render Logic
   return (
-    <div className="min-h-screen text-gray-100 p-4 md:p-8">
+    <div className="min-h-screen text-gray-100 p-4 md:p-8 font-sans">
       {/* Top Bar */}
       <div className="flex justify-between items-center max-w-7xl mx-auto mb-8 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleBackToLobby}
-            className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm transition-all hover:scale-110 hover:shadow-[0_0_25px_rgba(99,102,241,0.7)] cursor-pointer"
-            title="Bekleme odasına dön"
-          >
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm">
             LY
-          </button>
+          </div>
           <span className="font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 hidden sm:block">LinkYarış</span>
-
-          {/* Connection Status */}
+          
+          {/* Connection Status Indicator */}
           <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isOnline ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
             {isOnline ? (
-              <>
-                <WifiIcon className="w-3.5 h-3.5" /> Canlı
-              </>
+                <>
+                    <WifiIcon className="w-3.5 h-3.5" /> Canlı (Online)
+                </>
             ) : (
-              <>
-                <SignalSlashIcon className="w-3.5 h-3.5" /> Offline
-              </>
+                <>
+                    <SignalSlashIcon className="w-3.5 h-3.5" /> Demo (Offline)
+                </>
             )}
           </div>
         </div>
-
-        <div className="flex items-center gap-4">
-          {/* Room PIN */}
-          <div className="bg-white/5 px-4 py-2 rounded-full border border-white/10">
-            <span className="text-gray-400 text-xs mr-2">Oda:</span>
-            <span className="font-mono font-bold text-indigo-400 tracking-wider">{currentRoom.pin}</span>
+        
+        {currentUser && (
+          <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
+                <div className="text-gray-200">
+                  {currentUser.isMod ? (
+                    <span className="text-yellow-400 font-bold flex items-center gap-2">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                        </span>
+                        Moderatör Paneli
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                      {currentUser.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button 
+                onClick={handleSignOut}
+                className="bg-red-500/20 hover:bg-red-500/40 text-red-300 px-3 py-2 rounded-full text-xs font-bold transition-colors border border-red-500/30"
+              >
+                Çıkış Yap
+              </button>
           </div>
-
-          {/* Current User */}
-          <div className="flex items-center gap-2 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10">
-            {currentUser.isMod ? (
-              <span className="text-yellow-400 font-bold">👑 Moderatör</span>
-            ) : (
-              <span className="text-white">{currentUser.name}</span>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto">
-        {currentRoom.status === RoomStatus.SUBMISSION && (
-          <>
-            {currentUser.isMod ? (
-              <WaitingRoom
-                room={currentRoom}
-                currentUser={currentUser}
-                isMod={true}
-                onStartVoting={handleStartVoting}
-                onCancelRoom={handleCancelRoom}
-              />
-            ) : (
-              <LinkSubmission
-                room={currentRoom}
-                currentUser={currentUser}
-                onSubmitLink={handleSubmitLink}
-              />
-            )}
-          </>
-        )}
+      {!isOnline && (
+        <div className="max-w-7xl mx-auto mb-6 bg-yellow-900/20 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
+            <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500">
+                <CloudIcon className="w-6 h-6" />
+            </div>
+            <div>
+                <h4 className="font-bold text-yellow-500 text-sm">Offline Mod (Demo)</h4>
+                <p className="text-xs text-yellow-200/70 mt-1">
+                    Şu anda veritabanı bağlantısı yok. Yaptığınız işlemler sadece bu tarayıcıda çalışır. 
+                    Çok oyunculu mod için Netlify Environment Variables ayarlarında Firebase Config bilgilerini girmelisiniz.
+                </p>
+            </div>
+        </div>
+      )}
 
-        {currentRoom.status === RoomStatus.WAITING && (
-          <div className="text-center p-20">
-            <div className="text-6xl mb-4">⏳</div>
-            <h2 className="text-2xl font-bold text-white mb-2">Oyun Hazırlanıyor...</h2>
-            <p className="text-gray-400">Lütfen bekleyin</p>
-          </div>
-        )}
-
-        {currentRoom.status === RoomStatus.VOTING && (currentRoom.submissions?.length || 0) > 0 && (
-          <VotingView
-            currentSubmission={currentRoom.submissions[currentRoom.currentSubmissionIndex]}
-            isMod={currentUser.isMod}
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
+        {gameState.status === AppStatus.LOBBY && (
+          <LobbyView 
             currentUser={currentUser}
-            allSubmissions={currentRoom.submissions}
-            onVote={handleVote}
-            onNext={handleNextSubmission}
-            onFinish={handleFinishGame}
-            isLast={currentRoom.currentSubmissionIndex === (currentRoom.submissions?.length || 0) - 1}
-            onUpdateAiComment={handleUpdateAiComment}
+            users={gameState.users}
+            submissions={gameState.submissions}
+            onJoin={handleJoin}
+            onSubmitLink={handleSubmitLink}
+            onStartGame={handleStartGame}
+            isMod={currentUser?.isMod || false}
           />
         )}
 
-        {currentRoom.status === RoomStatus.RESULTS && (
-          <>
-            {console.log('Rendering RESULTS:', {
-              status: currentRoom.status,
-              submissionsCount: currentRoom.submissions?.length,
-              isMod: currentUser.isMod
-            })}
-            <ResultsView
-              submissions={currentRoom.submissions || []}
-              onReset={handleCancelRoom}
-              isMod={currentUser.isMod}
-            />
-          </>
+        {gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 && currentUser && (
+          <VotingView 
+            // The KEY prop forces a full re-render when index changes, fixing the "stuck UI" issue
+            key={gameState.currentSubmissionIndex}
+            currentSubmission={gameState.submissions[gameState.currentSubmissionIndex]}
+            isMod={currentUser.isMod}
+            currentUser={currentUser}
+            users={gameState.users}
+            onVote={handleVote}
+            onNext={handleNextSubmission}
+            onFinish={handleFinishGame}
+            isLast={gameState.currentSubmissionIndex === gameState.submissions.length - 1}
+            onUpdateAiComment={handleUpdateAiComment}
+            roundEndTime={gameState.roundEndTime}
+          />
+        )}
+
+        {gameState.status === AppStatus.RESULTS && (
+          <ResultsView 
+            submissions={gameState.submissions}
+            onReset={handleReset}
+            isMod={currentUser?.isMod || false}
+          />
         )}
       </main>
     </div>
