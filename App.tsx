@@ -176,6 +176,13 @@ const App: React.FC = () => {
     setCurrentUser(null);
   };
 
+  // Safe Access Logic for Views
+  // If we are in VOTING mode but there is no submission at current index, fallback to LOBBY or prevent crash
+  const currentSubmission = 
+    gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 
+    ? gameState.submissions[gameState.currentSubmissionIndex] 
+    : undefined;
+
   // Render Logic
   return (
     <div className="min-h-screen text-gray-100 p-4 md:p-8 font-sans">
@@ -260,21 +267,38 @@ const App: React.FC = () => {
           />
         )}
 
-        {gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 && currentUser && (
-          <VotingView 
-            // The KEY prop forces a full re-render when index changes, fixing the "stuck UI" issue
-            key={gameState.currentSubmissionIndex}
-            currentSubmission={gameState.submissions[gameState.currentSubmissionIndex]}
-            isMod={currentUser.isMod}
-            currentUser={currentUser}
-            users={gameState.users}
-            onVote={handleVote}
-            onNext={handleNextSubmission}
-            onFinish={handleFinishGame}
-            isLast={gameState.currentSubmissionIndex === gameState.submissions.length - 1}
-            onUpdateAiComment={handleUpdateAiComment}
-            roundEndTime={gameState.roundEndTime}
-          />
+        {/* Improved Crash Protection for Voting View */}
+        {gameState.status === AppStatus.VOTING && currentUser && (
+          currentSubmission ? (
+            <VotingView 
+              // The KEY prop forces a full re-render when index changes, fixing the "stuck UI" issue
+              key={gameState.currentSubmissionIndex}
+              currentSubmission={currentSubmission}
+              isMod={currentUser.isMod}
+              currentUser={currentUser}
+              users={gameState.users}
+              onVote={handleVote}
+              onNext={handleNextSubmission}
+              onFinish={handleFinishGame}
+              isLast={gameState.currentSubmissionIndex === gameState.submissions.length - 1}
+              onUpdateAiComment={handleUpdateAiComment}
+              roundEndTime={gameState.roundEndTime}
+            />
+          ) : (
+            // Fallback if submission index is invalid (prevents white screen)
+            <div className="text-center py-20 animate-fade-in">
+              <h2 className="text-3xl font-bold text-white mb-4">Veri Yükleniyor veya Sıra Tamamlandı</h2>
+              <p className="text-gray-400">Lütfen bekleyin veya sayfa yenilenmezse moderatör ile iletişime geçin.</p>
+              {currentUser.isMod && (
+                <button 
+                  onClick={handleFinishGame}
+                  className="mt-6 bg-indigo-600 px-6 py-3 rounded-xl font-bold"
+                >
+                  Sonuçlara Geç (Zorla)
+                </button>
+              )}
+            </div>
+          )
         )}
 
         {gameState.status === AppStatus.RESULTS && (

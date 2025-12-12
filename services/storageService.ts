@@ -14,17 +14,23 @@ export const isOnlineMode = () => !isOffline;
 const sanitizeState = (state: any): GameState => {
   if (!state) return INITIAL_STATE;
   
-  // Sanitize submissions to ensure 'votes' is always an object
+  // Sanitize submissions to ensure 'votes' is always an object and 'url' is a string
   const sanitizedSubmissions = (state.submissions || []).map((sub: any) => ({
     ...sub,
-    votes: sub.votes || {} // CRITICAL FIX: Ensure votes is never undefined
+    votes: sub.votes || {}, // CRITICAL FIX: Ensure votes is never undefined
+    url: sub.url || "https://example.com" // CRITICAL FIX: Ensure URL is never null
   }));
+
+  // Sanitize currentSubmissionIndex
+  let index = state.currentSubmissionIndex;
+  if (typeof index !== 'number') index = -1;
 
   return {
     ...INITIAL_STATE,
     ...state,
     users: state.users || [],
     submissions: sanitizedSubmissions,
+    currentSubmissionIndex: index,
     settings: { ...INITIAL_STATE.settings, ...(state.settings || {}) }
   };
 };

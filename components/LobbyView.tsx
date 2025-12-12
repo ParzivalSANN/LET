@@ -43,9 +43,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const hasSubmitted = currentUser && safeSubmissions.some(s => s.userId === currentUser.id);
 
   const handleModLogin = () => {
-    if (email === 'berkay-34ist@hotmail.com' && password === '123321') {
+    // Robust email check: trim whitespace and convert to lowercase
+    const cleanEmail = email.trim().toLowerCase();
+    
+    if (cleanEmail === 'berkay-34ist@hotmail.com' && password === '123321') {
       const success = onJoin('Moderatör', undefined, true);
-      if (!success) setError("Giriş başarısız.");
+      if (!success) setError("Giriş başarısız. Oturum hatası.");
     } else {
       setError('Hatalı e-posta veya şifre!');
       setTimeout(() => setError(''), 3000);

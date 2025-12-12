@@ -34,13 +34,34 @@ export const VotingView: React.FC<VotingViewProps> = ({
   const [hasTimedOut, setHasTimedOut] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // CRITICAL GUARD: If data is corrupted, don't crash the whole app
+  if (!currentSubmission) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <h2 className="text-2xl font-bold text-red-400 mb-2">Veri Hatası</h2>
+            <p className="text-gray-400">Bu sıra için veri bulunamadı.</p>
+            {isMod && (
+                <button onClick={onNext} className="mt-4 bg-gray-700 px-4 py-2 rounded-lg">
+                    Sonrakine Geç
+                </button>
+            )}
+        </div>
+      );
+  }
+
   // Safe access to votes object to prevent crash
   const currentVotes = currentSubmission.votes || {};
 
   // Helper to safely get hostname without crashing
   const getHostname = (urlString: string) => {
+    if (!urlString) return "Bilinmeyen Site";
     try {
-      return new URL(urlString).hostname;
+      // Ensure URL has protocol
+      let safeUrl = urlString;
+      if (!/^https?:\/\//i.test(safeUrl)) {
+          safeUrl = `https://${safeUrl}`;
+      }
+      return new URL(safeUrl).hostname;
     } catch (e) {
       return urlString; // Fallback to showing the raw string if invalid
     }
