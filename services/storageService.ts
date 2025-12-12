@@ -1,6 +1,6 @@
-import { GameState, INITIAL_STATE, User } from '../types';
+import { GameState, INITIAL_STATE, User, Submission, AppStatus } from '../types';
 import { db } from './firebase';
-import { ref, onValue, set, off, get, child, runTransaction } from 'firebase/database';
+import { ref, onValue, set, off, get, child, runTransaction, update } from 'firebase/database';
 
 const STORAGE_KEY_PREFIX = 'linkyaris_gamestate_';
 
@@ -73,37 +73,21 @@ export const addUserToGame = async (roomId: string, user: User): Promise<void> =
     const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
 
     if (isOffline) {
-        // Safe Local Storage Update
         const stored = localStorage.getItem(localKey);
         let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
-        
-        // Check for duplicates in local state
         const exists = currentState.users.some((u: User) => u.id === user.id || (u.name === user.name && u.isMod === user.isMod));
-        
         if (!exists) {
             currentState.users = [...currentState.users, user];
             localStorage.setItem(localKey, JSON.stringify(currentState));
             window.dispatchEvent(new Event('local-storage-update'));
         }
     } else {
-        // Safe Firebase Transaction
         const usersRef = ref(db, dbPath);
-        
         try {
             await runTransaction(usersRef, (currentUsers) => {
-                if (currentUsers === null) {
-                    return [user]; // Initialize if empty
-                }
-                
-                // Check if user already exists (by ID or Name+Role)
+                if (currentUsers === null) return [user];
                 const exists = currentUsers.some((u: any) => u.id === user.id || (u.name === user.name && u.isMod === user.isMod));
-                
-                if (exists) {
-                    // Abort transaction, user already there (or let it fail silently as success)
-                    return; 
-                }
-
-                // Append user
+                if (exists) return; // Already exists
                 return [...currentUsers, user];
             });
         } catch (error) {
@@ -113,68 +97,124 @@ export const addUserToGame = async (roomId: string, user: User): Promise<void> =
     }
 };
 
+/**
+ * Safely adds a submission without overwriting other parts of the state (like users).
+ */
+export const addSubmissionToGame = async (roomId: string, submission: Submission): Promise<void> => {
+    const dbPath = `games/${roomId}/submissions`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        currentState.submissions = [...(currentState.submissions || []), submission];
+        localStorage.setItem(localKey, JSON.stringify(currentState));
+        window.dispatchEvent(new Event('local-storage-update'));
+    } else {
+        const subsRef = ref(db, dbPath);
+        await runTransaction(subsRef, (currentSubmissions) => {
+            if (currentSubmissions === null) return [submission];
+            return [...currentSubmissions, submission];
+        });
+    }
+};
+
+/**
+ * Updates game status, settings, or index without touching users/submissions list directly.
+ */
+export const updateGameStatus = async (roomId: string, updates: Partial<GameState>) => {
+    const dbPath = `games/${roomId}`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        const newState = { ...currentState, ...updates, lastUpdated: Date.now() };
+        localStorage.setItem(localKey, JSON.stringify(newState));
+        window.dispatchEvent(new Event('local-storage-update'));
+    } else {
+        // Use Firebase update() which merges fields at the path
+        const gameRef = ref(db, dbPath);
+        await update(gameRef, { ...updates, lastUpdated: Date.now() });
+    }
+};
+
+/**
+ * Updates a specific vote safely.
+ */
+export const submitVote = async (roomId: string, submissionIndex: number, userId: string, score: number) => {
+    const dbPath = `games/${roomId}/submissions/${submissionIndex}/votes/${userId}`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        if (currentState.submissions && currentState.submissions[submissionIndex]) {
+             if (!currentState.submissions[submissionIndex].votes) currentState.submissions[submissionIndex].votes = {};
+             currentState.submissions[submissionIndex].votes[userId] = score;
+             localStorage.setItem(localKey, JSON.stringify(currentState));
+             window.dispatchEvent(new Event('local-storage-update'));
+        }
+    } else {
+        const voteRef = ref(db, dbPath);
+        await set(voteRef, score);
+    }
+};
+
+/**
+ * Updates AI Commentary for a specific submission.
+ */
+export const updateAiComment = async (roomId: string, submissionIndex: number, comment: string) => {
+    const dbPath = `games/${roomId}/submissions/${submissionIndex}/aiCommentary`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        if (currentState.submissions && currentState.submissions[submissionIndex]) {
+             currentState.submissions[submissionIndex].aiCommentary = comment;
+             localStorage.setItem(localKey, JSON.stringify(currentState));
+             window.dispatchEvent(new Event('local-storage-update'));
+        }
+    } else {
+        const commentRef = ref(db, dbPath);
+        await set(commentRef, comment);
+    }
+};
+
 export const subscribeToGame = (roomId: string, callback: (state: GameState) => void) => {
-  // Unsubscribe from previous if exists
-  if (currentRef && !isOffline) {
-    off(currentRef);
-  }
+  if (currentRef && !isOffline) off(currentRef);
 
   const dbPath = `games/${roomId}`;
   const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
-  
   currentCallback = callback;
 
   if (isOffline) {
-    // Local Storage Listener for specific room
     const handleStorage = () => {
         const stored = localStorage.getItem(localKey);
         if (stored) {
-            try {
-                callback(sanitizeState(JSON.parse(stored)));
-            } catch (e) {
-                console.error("Storage parse error", e);
-                callback(INITIAL_STATE);
-            }
-        } else {
-            callback(INITIAL_STATE);
-        }
+            try { callback(sanitizeState(JSON.parse(stored))); } catch (e) { callback(INITIAL_STATE); }
+        } else { callback(INITIAL_STATE); }
     };
-    
-    // Remove old listeners to prevent duplication
     window.removeEventListener('local-storage-update', handleStorage);
     window.addEventListener('local-storage-update', handleStorage);
-    
-    // Initial load
     const stored = localStorage.getItem(localKey);
-    if (stored) {
-        callback(sanitizeState(JSON.parse(stored)));
-    } else {
-        callback(INITIAL_STATE);
-    }
-
-    return () => {
-        window.removeEventListener('local-storage-update', handleStorage);
-    };
+    if (stored) callback(sanitizeState(JSON.parse(stored)));
+    else callback(INITIAL_STATE);
+    return () => { window.removeEventListener('local-storage-update', handleStorage); };
   } else {
-    // Firebase Listener
     const gameRef = ref(db, dbPath);
     currentRef = gameRef;
-
     const unsubscribe = onValue(gameRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        callback(sanitizeState(data));
-      } else {
-        // Initialize DB if empty for this room
-        // NOTE: We don't automatically set INITIAL_STATE here to avoid overwriting if a transaction is in progress
-        // Just callback with initial state, let the first write handle it.
-        callback(INITIAL_STATE);
-      }
+      if (data) callback(sanitizeState(data));
+      else callback(INITIAL_STATE);
     });
     return () => off(gameRef);
   }
 };
 
+// Deprecated: Use specific update functions instead to avoid overwriting users.
 export const saveState = (roomId: string, state: GameState) => {
   const newState = { ...state, lastUpdated: Date.now() };
   const dbPath = `games/${roomId}`;
@@ -182,19 +222,17 @@ export const saveState = (roomId: string, state: GameState) => {
   
   if (isOffline) {
     localStorage.setItem(localKey, JSON.stringify(newState));
-    // Dispatch event so other tabs/hooks update
     window.dispatchEvent(new Event('local-storage-update'));
   } else {
     const gameRef = ref(db, dbPath);
-    // Explicitly catching write errors to prevent UI crashes
-    set(gameRef, newState).catch(err => {
-        console.error("Firebase update failed:", err);
-    });
+    set(gameRef, newState).catch(err => { console.error("Firebase update failed:", err); });
   }
-  
   return newState;
 };
 
+/**
+ * Hard Reset: Deletes everything.
+ */
 export const resetGame = (roomId: string) => {
   const dbPath = `games/${roomId}`;
   const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
@@ -206,4 +244,41 @@ export const resetGame = (roomId: string) => {
     const gameRef = ref(db, dbPath);
     set(gameRef, INITIAL_STATE);
   }
+};
+
+/**
+ * Soft Reset: Clears submissions and status, BUT KEEPS USERS.
+ * Used for starting a new round with the same people.
+ */
+export const softResetGame = async (roomId: string) => {
+    const dbPath = `games/${roomId}`;
+    const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
+    if (isOffline) {
+        const stored = localStorage.getItem(localKey);
+        let currentState = stored ? JSON.parse(stored) : INITIAL_STATE;
+        
+        // Keep users, reset everything else
+        const newState = {
+            ...INITIAL_STATE,
+            users: currentState.users || [], // PRESERVE USERS
+            lastUpdated: Date.now()
+        };
+        
+        localStorage.setItem(localKey, JSON.stringify(newState));
+        window.dispatchEvent(new Event('local-storage-update'));
+    } else {
+        const gameRef = ref(db, dbPath);
+        // We need to read users first (or assume current state is okay? No, safer to use transaction or update)
+        // Since update merges, we can't easily "delete" the submissions array with update if we don't set it to null/empty.
+        // Best approach: Transaction on the whole game, preserving users.
+        await runTransaction(gameRef, (currentGame) => {
+            if (!currentGame) return INITIAL_STATE;
+            return {
+                ...INITIAL_STATE,
+                users: currentGame.users || [], // PRESERVE USERS
+                lastUpdated: Date.now()
+            };
+        });
+    }
 };

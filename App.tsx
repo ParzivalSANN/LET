@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_STATE, GameState, AppStatus, User, Submission } from './types';
-import { subscribeToGame, saveState, resetGame, isOnlineMode, doesRoomExist, addUserToGame } from './services/storageService';
+import { subscribeToGame, isOnlineMode, doesRoomExist, addUserToGame, addSubmissionToGame, updateGameStatus, submitVote, updateAiComment, softResetGame, resetGame } from './services/storageService';
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
@@ -23,8 +23,6 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const urlRoom = params.get('room');
     if (urlRoom) {
-      // URL'den gelen oda için de kontrol yapmıyoruz ama 
-      // kullanıcı "Odaya Katıl" dediğinde kontrol edilecek.
       setRoomId(urlRoom);
     }
     setIsOnline(isOnlineMode());
@@ -46,7 +44,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!roomId) return;
 
-    // Update URL without reloading
     const url = new URL(window.location.href);
     url.searchParams.set('room', roomId);
     window.history.replaceState({}, '', url);
@@ -60,15 +57,13 @@ const App: React.FC = () => {
     };
   }, [roomId]);
 
-  // Handle Pending Login (Wait for GameState to load after setting RoomID)
+  // Handle Pending Login
   useEffect(() => {
     if (pendingLogin && gameState && roomId) {
-        // Try to join now that we have state
-        // We use an async wrapper inside useEffect
         const tryJoin = async () => {
             const success = await executeJoin(pendingLogin.name, pendingLogin.password, pendingLogin.isMod);
             if (success) {
-                setPendingLogin(null); // Clear pending
+                setPendingLogin(null);
                 setLoginError('');
             } else {
                 setPendingLogin(null);
@@ -86,7 +81,6 @@ const App: React.FC = () => {
 
       const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
       
-      // Check existing in LOCAL state for login validation
       const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
       let userToSet: User;
   
@@ -99,9 +93,7 @@ const App: React.FC = () => {
            }
         }
         userToSet = { ...existingUser, password: existingUser.password || "" };
-        // If user exists, we just set the session locally, no need to write to DB
       } else {
-        // If mod, allow creation anytime. If user, ensure name isn't taken by a different type locally first
         if (gameState.users.some(u => u.name === finalName)) return false;
 
         userToSet = {
@@ -112,7 +104,6 @@ const App: React.FC = () => {
           password: password || ""
         };
         
-        // SAFE JOIN: Use transaction to add user to DB
         try {
             await addUserToGame(roomId, userToSet);
         } catch (e) {
@@ -126,7 +117,6 @@ const App: React.FC = () => {
       return true;
   };
 
-  // Handlers triggered by UI
   const handleConnectAndJoin = async (roomInput: string, name: string, password?: string, isMod: boolean = false) => {
       const cleanRoom = roomInput.trim();
       if (!cleanRoom) return false;
@@ -134,9 +124,6 @@ const App: React.FC = () => {
       setIsVerifying(true);
       setLoginError('');
 
-      // CRITICAL LOGIC FIX:
-      // Eğer kullanıcı MODERATÖR DEĞİLSE, oda var mı diye kontrol et.
-      // Yoksa içeri alma, roomId'yi set etme.
       if (!isMod) {
         const exists = await doesRoomExist(cleanRoom);
         if (!exists) {
@@ -146,7 +133,6 @@ const App: React.FC = () => {
         }
       }
 
-      // Eğer zaten bu odadaysak direkt katılmayı dene
       if (roomId === cleanRoom) {
           const success = await executeJoin(name, password, isMod);
           if (!success) {
@@ -156,13 +142,12 @@ const App: React.FC = () => {
           return success;
       }
 
-      // Eğer oda değişiyorsa (veya ilk girişse) ve yukarıdaki kontrolü geçtiysek:
       setRoomId(cleanRoom);
       setPendingLogin({ name, password, isMod });
-      // verifying false yapmıyoruz, pendingLogin useEffect'i arayüzü yönetecek
       return true; 
   };
 
+  // FIX: Use addSubmissionToGame to avoid overwriting users
   const handleSubmitLink = (url: string, description: string) => {
     if (!currentUser || !roomId) return;
     
@@ -175,85 +160,68 @@ const App: React.FC = () => {
       votes: {}
     };
 
-    const newState = {
-      ...gameState,
-      submissions: [...gameState.submissions, newSubmission]
-    };
-    saveState(roomId, newState);
+    addSubmissionToGame(roomId, newSubmission);
   };
 
+  // FIX: Use updateGameStatus to avoid overwriting users
   const handleStartGame = (duration: number) => {
     if (!roomId) return;
-    const newState: GameState = {
-      ...gameState,
+    updateGameStatus(roomId, {
       status: AppStatus.VOTING,
       currentSubmissionIndex: 0,
       settings: {
         timerDuration: duration
       },
       roundEndTime: Date.now() + (duration * 1000)
-    };
-    saveState(roomId, newState);
-  };
-
-  const handleVote = (score: number) => {
-    if (!currentUser || !roomId) return;
-    const currentSub = gameState.submissions[gameState.currentSubmissionIndex];
-    if (!currentSub) return;
-
-    const updatedSub = {
-      ...currentSub,
-      votes: { ...currentSub.votes, [currentUser.id]: score }
-    };
-
-    const updatedSubmissions = [...gameState.submissions];
-    updatedSubmissions[gameState.currentSubmissionIndex] = updatedSub;
-
-    saveState(roomId, {
-      ...gameState,
-      submissions: updatedSubmissions
     });
   };
 
+  // FIX: Use submitVote to avoid overwriting
+  const handleVote = (score: number) => {
+    if (!currentUser || !roomId) return;
+    // We pass the index and score. The service handles the path.
+    submitVote(roomId, gameState.currentSubmissionIndex, currentUser.id, score);
+  };
+
+  // FIX: Use updateGameStatus
   const handleNextSubmission = () => {
     if (!roomId) return;
     const nextIndex = gameState.currentSubmissionIndex + 1;
     if (nextIndex < gameState.submissions.length) {
-      saveState(roomId, {
-        ...gameState,
+      updateGameStatus(roomId, {
         currentSubmissionIndex: nextIndex,
         roundEndTime: Date.now() + (gameState.settings.timerDuration * 1000)
       });
     }
   };
 
+  // FIX: Use updateGameStatus
   const handleFinishGame = () => {
     if (!roomId) return;
-    saveState(roomId, {
-      ...gameState,
+    updateGameStatus(roomId, {
       status: AppStatus.RESULTS
     });
   };
 
+  // FIX: Use updateAiComment
   const handleUpdateAiComment = (submissionId: string, comment: string) => {
      if (!roomId) return;
-     const updatedSubmissions = gameState.submissions.map(s => {
-       if (s.id === submissionId) {
-         return { ...s, aiCommentary: comment };
-       }
-       return s;
-     });
-     
-     saveState(roomId, {
-       ...gameState,
-       submissions: updatedSubmissions
-     });
+     // Finding index for optimization, though ID lookup could be implemented in service
+     const index = gameState.submissions.findIndex(s => s.id === submissionId);
+     if (index !== -1) {
+         updateAiComment(roomId, index, comment);
+     }
   };
 
   const handleReset = () => {
     if (!roomId) return;
-    if (confirm("Herkes için oyunu sıfırlamak istediğine emin misin?")) {
-        resetGame(roomId);
+    
+    // Check if user wants a full wipe or just a new round
+    // We'll default to "New Round" (Keeping users) as requested "lobiyi sıfırla" usually means reset game state
+    // but the user also asked to keep users in logs. 
+    
+    if (confirm("YENİ YARIŞMA: Mevcut kullanıcıları odada tutup, sadece linkleri ve oyları sıfırlamak istiyor musun?\n\n(İptal dersen hiçbir şey olmaz)")) {
+        softResetGame(roomId);
     }
   };
 
@@ -343,7 +311,6 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
         {(!currentUser) && (
-          // LOGIN SCREEN (Managed by LobbyView now acts as Login View)
            <LobbyView 
             roomId={roomId || ""}
             currentUser={null}
@@ -364,7 +331,7 @@ const App: React.FC = () => {
             currentUser={currentUser}
             users={gameState.users}
             submissions={gameState.submissions}
-            onJoin={() => true} // Already joined
+            onJoin={() => true} 
             onSubmitLink={handleSubmitLink}
             onStartGame={handleStartGame}
             isMod={currentUser.isMod}
