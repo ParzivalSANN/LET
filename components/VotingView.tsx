@@ -34,16 +34,19 @@ export const VotingView: React.FC<VotingViewProps> = ({
   const [hasTimedOut, setHasTimedOut] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Safe access to votes object to prevent crash
+  const currentVotes = currentSubmission.votes || {};
+
   // Sync state from server/props
   useEffect(() => {
     // Check if user already voted
-    const existingVote = currentSubmission.votes[currentUser.id];
+    const existingVote = currentVotes[currentUser.id];
     if (existingVote !== undefined) {
       setSelectedScore(existingVote);
     } else {
       setSelectedScore(null);
     }
-  }, [currentSubmission.id, currentUser.id, currentSubmission.votes]);
+  }, [currentSubmission.id, currentUser.id, currentVotes]);
 
   // Countdown Logic
   useEffect(() => {
@@ -55,8 +58,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
       if (remaining === 0) {
         setHasTimedOut(true);
         // If time is up and user hasn't voted, cast a blank vote (0)
-        // Only trigger this if we haven't voted locally yet
-        const myVote = currentSubmission.votes[currentUser.id];
+        const myVote = (currentSubmission.votes || {})[currentUser.id];
         if (myVote === undefined && !isMod) {
            handleVote(0);
         }
@@ -88,10 +90,9 @@ export const VotingView: React.FC<VotingViewProps> = ({
   };
 
   // Calculate stats for Moderator
-  const totalVoters = users.filter(u => !u.isMod).length; // Exclude mods from denominator if mods don't vote usually, but assume they do or don't based on your logic. Let's assume everyone except the submittor votes? Or everyone. Let's just say all users minus mod if mod doesn't vote.
-  // Actually, usually everyone except the Mod votes in this app logic based on LobbyView logic.
   const activeVotersCount = users.filter(u => !u.isMod).length; 
-  const currentVotesCount = Object.keys(currentSubmission.votes).length;
+  // FIX: Ensure Object.keys doesn't crash on undefined
+  const currentVotesCount = Object.keys(currentVotes).length;
   const progressPercent = activeVotersCount > 0 ? (currentVotesCount / activeVotersCount) * 100 : 0;
 
   // Render "Waiting" screen if user voted or timed out

@@ -1,4 +1,4 @@
-import { GameState, INITIAL_STATE } from '../types';
+import { GameState, INITIAL_STATE, Submission } from '../types';
 import { db } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
 
@@ -13,11 +13,18 @@ export const isOnlineMode = () => !isOffline;
 // Helper to ensure state always has required arrays (Fixes 'undefined' errors)
 const sanitizeState = (state: any): GameState => {
   if (!state) return INITIAL_STATE;
+  
+  // Sanitize submissions to ensure 'votes' is always an object
+  const sanitizedSubmissions = (state.submissions || []).map((sub: any) => ({
+    ...sub,
+    votes: sub.votes || {} // CRITICAL FIX: Ensure votes is never undefined
+  }));
+
   return {
     ...INITIAL_STATE,
     ...state,
     users: state.users || [],
-    submissions: state.submissions || [],
+    submissions: sanitizedSubmissions,
     settings: { ...INITIAL_STATE.settings, ...(state.settings || {}) }
   };
 };

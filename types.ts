@@ -3,6 +3,7 @@ export interface User {
   name: string;
   isMod: boolean;
   joinedAt: number;
+  password?: string; // Optional for backward compatibility, but used for reconnection
 }
 
 export interface Vote {

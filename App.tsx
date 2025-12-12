@@ -38,7 +38,7 @@ const App: React.FC = () => {
   }, []);
 
   // Handlers
-  const handleJoin = (name: string, isMod: boolean = false) => {
+  const handleJoin = (name: string, password?: string, isMod: boolean = false): boolean => {
     const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
     
     // Check if user already exists in game state
@@ -47,13 +47,22 @@ const App: React.FC = () => {
     let userToSet: User;
 
     if (existingUser) {
+      // If user exists, verify password (if not mod) to allow reconnection
+      if (!isMod) {
+         if (existingUser.password !== password) {
+             // Password mismatch
+             return false;
+         }
+      }
       userToSet = existingUser;
     } else {
+      // Create new user
       userToSet = {
         id: crypto.randomUUID(),
         name: finalName,
         isMod: isMod,
-        joinedAt: Date.now()
+        joinedAt: Date.now(),
+        password: password
       };
       
       const newState = {
@@ -65,6 +74,7 @@ const App: React.FC = () => {
 
     setCurrentUser(userToSet);
     localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
+    return true;
   };
 
   const handleSubmitLink = (url: string, description: string) => {
