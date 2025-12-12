@@ -23,9 +23,23 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const urlRoom = params.get('room');
     if (urlRoom) {
+      // URL'den gelen oda için de kontrol yapmıyoruz ama 
+      // kullanıcı "Odaya Katıl" dediğinde kontrol edilecek.
       setRoomId(urlRoom);
     }
     setIsOnline(isOnlineMode());
+  }, []);
+
+  // Restore user session
+  useEffect(() => {
+     const storedUser = localStorage.getItem('linkyaris_user_session');
+     if (storedUser) {
+         try {
+             setCurrentUser(JSON.parse(storedUser));
+         } catch (e) {
+             console.error("Failed to restore session");
+         }
+     }
   }, []);
 
   // Sync state from Storage Service
@@ -55,26 +69,12 @@ const App: React.FC = () => {
             setPendingLogin(null); // Clear pending
             setLoginError('');
         } else {
-            // Only set error if we are sure data is loaded (users array exists)
-            // For a new room, users might be empty, which is fine for new user
-            // But if it's a mod login failure or password mismatch, we handle it.
             setPendingLogin(null);
             setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
         }
     }
   }, [gameState, pendingLogin, roomId]);
 
-  // Restore user session
-  useEffect(() => {
-     const storedUser = localStorage.getItem('linkyaris_user_session');
-     if (storedUser) {
-         try {
-             setCurrentUser(JSON.parse(storedUser));
-         } catch (e) {
-             console.error("Failed to restore session");
-         }
-     }
-  }, []);
 
   // Actual Logic to Modify State
   const executeJoin = (name: string, password?: string, isMod: boolean = false): boolean => {
@@ -105,6 +105,8 @@ const App: React.FC = () => {
           password: password || ""
         };
         
+        // Sadece kullanıcı zaten varsa veya moderatörse kaydediyoruz.
+        // Ancak subscribeToGame zaten odayı oluşturmuş olabilir, burada kullanıcıyı ekliyoruz.
         const newState = {
           ...gameState,
           users: [...gameState.users, userToSet]
@@ -125,29 +127,32 @@ const App: React.FC = () => {
       setIsVerifying(true);
       setLoginError('');
 
-      // If user is NOT a mod, check if room exists first
+      // CRITICAL LOGIC FIX:
+      // Eğer kullanıcı MODERATÖR DEĞİLSE, oda var mı diye kontrol et.
+      // Yoksa içeri alma, roomId'yi set etme.
       if (!isMod) {
-          // If we are already in this room and just logging in again, skip check (optional, but safer to check)
-          if (roomId !== cleanRoom) {
-              const exists = await doesRoomExist(cleanRoom);
-              if (!exists) {
-                  setLoginError('Böyle bir oda bulunamadı. Sadece moderatör oda oluşturabilir.');
-                  setIsVerifying(false);
-                  return false;
-              }
-          }
+        const exists = await doesRoomExist(cleanRoom);
+        if (!exists) {
+            setLoginError('Böyle bir oda bulunamadı. Lütfen oda numarasını kontrol edin.');
+            setIsVerifying(false);
+            return false;
+        }
       }
 
-      // If we are already in this room, try to join immediately
+      // Eğer zaten bu odadaysak direkt katılmayı dene
       if (roomId === cleanRoom) {
-          setIsVerifying(false); // Stop verifying spinner, executeJoin will run synchronously
-          return executeJoin(name, password, isMod);
+          const success = executeJoin(name, password, isMod);
+          if (!success) {
+             setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
+          }
+          setIsVerifying(false);
+          return success;
       }
 
-      // If switching rooms or first time
+      // Eğer oda değişiyorsa (veya ilk girişse) ve yukarıdaki kontrolü geçtiysek:
       setRoomId(cleanRoom);
       setPendingLogin({ name, password, isMod });
-      setIsVerifying(false); // Pending login state will take over the loading UI
+      // verifying false yapmıyoruz, pendingLogin useEffect'i arayüzü yönetecek
       return true; 
   };
 
@@ -248,8 +253,8 @@ const App: React.FC = () => {
   const handleSignOut = () => {
     localStorage.removeItem('linkyaris_user_session');
     setCurrentUser(null);
-    setRoomId(null); // Optional: Clear room on sign out? Let's keep room for UX.
-    window.location.href = window.location.pathname; // Hard reset to clear URL params and state
+    setRoomId(null); 
+    window.location.href = window.location.pathname; 
   };
 
   const currentSubmission = 
