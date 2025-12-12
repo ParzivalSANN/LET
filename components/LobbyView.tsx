@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { User, Submission } from '../types';
-import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon, ExclamationCircleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon, ExclamationCircleIcon, ClipboardDocumentIcon, SignalIcon } from '@heroicons/react/24/outline';
 
 interface LobbyViewProps {
   roomId: string;
   currentUser: User | null;
   users: User[];
   submissions: Submission[];
-  // Updated onJoin signature to accept roomInput from the login form
   onJoin: (name: string, password?: string, isMod?: boolean, roomInput?: string) => boolean; 
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: (duration: number) => void;
@@ -64,13 +63,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   }, [externalError]);
 
   const handleCopyLink = async () => {
+    // Force HTTP for sharing to avoid SSL errors on local network
+    const currentUrl = window.location.href;
+    const shareableUrl = currentUrl.replace('https://', 'http://');
+
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(shareableUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      // Fallback if clipboard API fails (common on HTTP connections)
-      setError('Güvenli bağlantı olmadığı için otomatik kopyalanamadı. Linki aşağıdan manuel alabilirsin.');
+      // Fallback if clipboard API fails
+      setError('Manuel kopyalayınız (Aşağıda).');
       setTimeout(() => setError(''), 4000);
     }
   };
@@ -118,7 +121,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     onSubmitLink(formattedUrl, desc);
   };
 
-  // 1. LOGIN SCREEN (Matches the requested dark blue card design)
+  // 1. LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[90vh] animate-fade-in relative px-4">
@@ -140,7 +143,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">ODA KODU</label>
                 <input
-                    type="text" // numeric input might show arrows, text is safer for styling
+                    type="text"
                     inputMode="numeric"
                     value={roomInput}
                     onChange={(e) => setRoomInput(e.target.value)}
@@ -224,7 +227,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               )}
             </button>
             
-            {/* Moderator Toggle Link */}
             <div className="text-center pt-4">
                 <button 
                     onClick={() => { setIsModLogin(!isModLogin); setError(''); }}
@@ -268,10 +270,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     )}
                 </h2>
                 
-                {/* Room ID and Link Share - Improved for HTTP/Mobile */}
+                {/* Room ID and Link Share */}
                 <div className="flex flex-col items-end gap-2 w-full md:w-auto relative z-20">
-                     <span className="text-xs text-gray-500 font-bold uppercase hidden md:block">Oda Numarası</span>
-                     
                      <div className="flex items-center gap-2 w-full md:w-auto">
                         <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/10 w-full md:w-auto">
                            <span className="text-gray-400 text-xs font-bold select-none">ODA:</span>
@@ -279,31 +279,35 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         </div>
                      </div>
 
-                     <div className="flex items-center gap-2 w-full md:w-auto">
-                         <div className="relative flex-1 md:w-64">
+                     <div className="bg-indigo-900/40 border border-indigo-500/30 rounded-xl p-3 w-full md:w-80">
+                         <div className="flex items-center gap-2 mb-2">
+                             <SignalIcon className="w-4 h-4 text-indigo-400" />
+                             <span className="text-[10px] font-bold text-indigo-200 uppercase">Paylaşılabilir Link (Sadece HTTP)</span>
+                         </div>
+                         <div className="flex items-center gap-2">
                              <input 
                                readOnly
                                value={window.location.href.replace('https://', 'http://')}
-                               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-indigo-200 font-mono focus:outline-none"
+                               className="w-full bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-300 font-mono focus:outline-none select-all"
                                onClick={(e) => e.currentTarget.select()}
                              />
+                             <button 
+                                onClick={handleCopyLink}
+                                className="bg-indigo-600 hover:bg-indigo-500 p-1.5 rounded-lg text-white transition-colors shrink-0"
+                                title="Kopyala"
+                             >
+                                {copied ? <CheckIcon className="w-4 h-4" /> : <ClipboardDocumentIcon className="w-4 h-4" />}
+                             </button>
                          </div>
-                         <button 
-                            onClick={handleCopyLink}
-                            className="bg-indigo-600 hover:bg-indigo-500 p-1.5 rounded-lg text-white transition-colors"
-                            title="Linki Kopyala"
-                         >
-                            {copied ? <CheckIcon className="w-4 h-4" /> : <ClipboardDocumentIcon className="w-4 h-4" />}
-                         </button>
+                         <div className="mt-2 flex items-start gap-1.5 text-[10px] text-orange-300/80 leading-relaxed">
+                            <ExclamationCircleIcon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <span>
+                                <strong>ÖNEMLİ:</strong> Diğer cihazlarda hata alıyorsanız, linkin başındaki "https" kısmını silip "http" yapın.
+                            </span>
+                         </div>
                      </div>
                      
-                     {/* Warning only visible if protocol is https but hostname is IP (unlikely) or just general advice */}
-                     <div className="flex items-start gap-1 text-[10px] text-orange-400/80 max-w-xs text-right leading-tight">
-                        <ExclamationCircleIcon className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span>Diğer cihazlardan girerken <strong>http://</strong> kullanın. (s yok)</span>
-                     </div>
-                     
-                     {error && <span className="text-xs text-red-400 font-bold animate-fade-in absolute top-full mt-2 right-0 bg-red-900/90 px-2 py-1 rounded">{error}</span>}
+                     {error && <span className="text-xs text-red-400 font-bold animate-fade-in mt-1">{error}</span>}
                 </div>
               </div>
               
