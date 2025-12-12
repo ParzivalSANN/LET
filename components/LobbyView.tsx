@@ -7,7 +7,8 @@ interface LobbyViewProps {
   currentUser: User | null;
   users: User[];
   submissions: Submission[];
-  onJoin: (name: string, password?: string, isMod?: boolean, roomInput?: string) => any; 
+  // FIXED: Argument order matched with App.tsx (roomInput first)
+  onJoin: (roomInput: string, name: string, password?: string, isMod?: boolean) => any; 
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: (duration: number) => void;
   isMod: boolean;
@@ -98,7 +99,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         // Moderator Login
         const cleanEmail = email.trim().toLowerCase();
         if (cleanEmail === 'berkay-34ist@hotmail.com' && adminPassword === '123321') {
-           onJoin('Moderatör', "", true, roomInput);
+           // FIXED: Correct order: (Room, Name, Password, IsMod)
+           onJoin(roomInput, 'Moderatör', adminPassword, true);
         } else {
            setError('Hatalı yönetici bilgileri!');
         }
@@ -116,7 +118,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
              setError('Şifre en az 4 karakter olmalı.');
              return;
         }
-        onJoin(name, userPassword, false, roomInput);
+        // FIXED: Correct order: (Room, Name, Password, IsMod)
+        onJoin(roomInput, name, userPassword, false);
     }
   };
 
