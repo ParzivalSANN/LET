@@ -1,9 +1,8 @@
-import { GameState, INITIAL_STATE, Submission } from '../types';
+import { GameState, INITIAL_STATE } from '../types';
 import { db } from './firebase';
-import { ref, onValue, set } from 'firebase/database';
+import { ref, onValue, set, off } from 'firebase/database';
 
-const STORAGE_KEY = 'linkyaris_gamestate_v1';
-const DB_REF = 'gamestate';
+const STORAGE_KEY_PREFIX = 'linkyaris_gamestate_';
 
 let isOffline = !db;
 
@@ -41,11 +40,24 @@ const sanitizeState = (state: any): GameState => {
   };
 };
 
-export const subscribeToGame = (callback: (state: GameState) => void) => {
+let currentRef: any = null;
+let currentCallback: ((state: GameState) => void) | null = null;
+
+export const subscribeToGame = (roomId: string, callback: (state: GameState) => void) => {
+  // Unsubscribe from previous if exists
+  if (currentRef && !isOffline) {
+    off(currentRef);
+  }
+
+  const dbPath = `games/${roomId}`;
+  const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+  
+  currentCallback = callback;
+
   if (isOffline) {
-    // Local Storage Listener
+    // Local Storage Listener for specific room
     const handleStorage = () => {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(localKey);
         if (stored) {
             try {
                 callback(sanitizeState(JSON.parse(stored)));
@@ -53,72 +65,74 @@ export const subscribeToGame = (callback: (state: GameState) => void) => {
                 console.error("Storage parse error", e);
                 callback(INITIAL_STATE);
             }
+        } else {
+            callback(INITIAL_STATE);
         }
     };
-    window.addEventListener('storage', handleStorage);
+    
+    // Remove old listeners to prevent duplication
+    window.removeEventListener('local-storage-update', handleStorage);
     window.addEventListener('local-storage-update', handleStorage);
     
     // Initial load
-    const current = getStoredState();
-    callback(current);
+    const stored = localStorage.getItem(localKey);
+    if (stored) {
+        callback(sanitizeState(JSON.parse(stored)));
+    } else {
+        callback(INITIAL_STATE);
+    }
 
     return () => {
-        window.removeEventListener('storage', handleStorage);
         window.removeEventListener('local-storage-update', handleStorage);
     };
   } else {
     // Firebase Listener
-    const gameRef = ref(db, DB_REF);
+    const gameRef = ref(db, dbPath);
+    currentRef = gameRef;
+
     const unsubscribe = onValue(gameRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         callback(sanitizeState(data));
       } else {
-        // Initialize DB if empty
+        // Initialize DB if empty for this room
         set(gameRef, INITIAL_STATE);
         callback(INITIAL_STATE);
       }
     });
-    return () => unsubscribe();
+    return () => off(gameRef);
   }
 };
 
-export const getStoredState = (): GameState => {
-  // Synchronous read only works for local storage
-  // For Firebase, the UI relies on the subscription
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return INITIAL_STATE;
-  try {
-    return sanitizeState(JSON.parse(stored));
-  } catch {
-    return INITIAL_STATE;
-  }
-};
-
-export const saveState = (state: GameState) => {
+export const saveState = (roomId: string, state: GameState) => {
   const newState = { ...state, lastUpdated: Date.now() };
+  const dbPath = `games/${roomId}`;
+  const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
   
   if (isOffline) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+    localStorage.setItem(localKey, JSON.stringify(newState));
+    // Dispatch event so other tabs/hooks update
     window.dispatchEvent(new Event('local-storage-update'));
   } else {
-    const gameRef = ref(db, DB_REF);
-    // Explicitly catching write errors to prevent UI crashes, though this is async
+    const gameRef = ref(db, dbPath);
+    // Explicitly catching write errors to prevent UI crashes
     set(gameRef, newState).catch(err => {
         console.error("Firebase update failed:", err);
-        // If it failed due to undefined, we might want to alert the user, but console error is best we can do in async void
     });
   }
   
   return newState;
 };
 
-export const resetGame = () => {
+export const resetGame = (roomId: string) => {
+  const dbPath = `games/${roomId}`;
+  const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+
   if (isOffline) {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(localKey);
     window.dispatchEvent(new Event('local-storage-update'));
   } else {
-    const gameRef = ref(db, DB_REF);
+    const gameRef = ref(db, dbPath);
     set(gameRef, INITIAL_STATE);
   }
 };

@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { User, Submission } from '../types';
-import { ShareIcon, UserGroupIcon, ShieldCheckIcon, KeyIcon, ArrowRightIcon, ComputerDesktopIcon, QrCodeIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface LobbyViewProps {
+  roomId: string;
   currentUser: User | null;
   users: User[];
   submissions: Submission[];
-  onJoin: (name: string, password?: string, isMod?: boolean) => boolean; // Updated signature to return success status
+  onJoin: (name: string, password?: string, isMod?: boolean) => boolean; 
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: (duration: number) => void;
   isMod: boolean;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
+  roomId,
   currentUser,
   users,
   submissions,
@@ -21,33 +23,32 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onStartGame,
   isMod
 }) => {
-  // Safety checks for arrays
   const safeUsers = users || [];
   const safeSubmissions = submissions || [];
 
-  // Login States
   const [name, setName] = useState('');
-  const [userPassword, setUserPassword] = useState(''); // New state for user password
-  const [viewMode, setViewMode] = useState<'user' | 'admin'>('user'); // user or admin
+  const [userPassword, setUserPassword] = useState(''); 
+  const [viewMode, setViewMode] = useState<'user' | 'admin'>('user');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
   
-  // Settings State
   const [duration, setDuration] = useState(30);
-
-  // Submission States
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
 
   const hasSubmitted = currentUser && safeSubmissions.some(s => s.userId === currentUser.id);
 
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleModLogin = () => {
-    // Robust email check: trim whitespace and convert to lowercase
     const cleanEmail = email.trim().toLowerCase();
-    
     if (cleanEmail === 'berkay-34ist@hotmail.com' && password === '123321') {
-      // FIX: Pass empty string "" instead of undefined to ensure strict type safety for Firebase
       const success = onJoin('Moderatör', "", true);
       if (!success) setError("Giriş başarısız. Oturum hatası.");
     } else {
@@ -71,23 +72,29 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const handleUrlSubmit = () => {
     let formattedUrl = url.trim();
     if (!formattedUrl) return;
-
-    // Fix: Automatically add https:// if missing to prevent URL constructor errors
     if (!/^https?:\/\//i.test(formattedUrl)) {
         formattedUrl = `https://${formattedUrl}`;
     }
-
     onSubmitLink(formattedUrl, desc);
   };
 
-  // 1. EKRAN: GİRİŞ EKRANI (Login Screen)
+  // 1. LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in relative px-4">
-        {/* Main Card */}
+        {/* Room Info Banner */}
+        <div className="mb-6 flex flex-col items-center gap-2">
+            <span className="text-gray-400 text-sm font-bold uppercase tracking-widest">Şu anki Oda</span>
+            <div className="bg-indigo-900/40 border border-indigo-500/30 px-6 py-2 rounded-full font-mono text-xl text-indigo-300 font-bold flex items-center gap-3">
+                #{roomId}
+                <button onClick={handleCopyLink} className="hover:text-white transition-colors" title="Linki Kopyala">
+                    {copied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <LinkIcon className="w-5 h-5" />}
+                </button>
+            </div>
+            {copied && <span className="text-xs text-green-400 font-bold animate-fade-in">Link kopyalandı! Arkadaşına gönder.</span>}
+        </div>
+
         <div className="bg-glass backdrop-blur-2xl p-8 md:p-10 rounded-[2rem] shadow-2xl border border-white/10 w-full max-w-md relative overflow-hidden transition-all duration-500">
-          
-          {/* Header */}
           <div className="text-center mb-8 relative z-10">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">
               Link<span className="text-indigo-400">Yarış</span>
@@ -95,7 +102,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <p className="text-gray-400 text-sm font-medium">Linkini paylaş, puanları topla!</p>
           </div>
 
-          {/* Mode Tabs */}
           <div className="flex border-b border-white/10 mb-6 relative z-10">
             <button
               onClick={() => { setViewMode('user'); setError(''); }}
@@ -111,10 +117,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </button>
           </div>
 
-          {/* Forms */}
           <div className="relative z-10">
             {viewMode === 'admin' ? (
-              // Mod Login Form
               <div className="space-y-4 animate-fade-in">
                 <input
                   type="email"
@@ -139,7 +143,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </button>
               </div>
             ) : (
-              // User Login Form (İsim ve Şifre)
               <div className="space-y-4 animate-fade-in">
                 <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Takma Adın</label>
@@ -185,39 +188,45 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     );
   }
 
-  // 2. EKRAN: LOBİ VE PANEL (Logged In)
+  // 2. LOBBY INTERFACE
   return (
     <div className="max-w-7xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
         
-        {/* Left Column: Main Action Area */}
+        {/* Left Column */}
         <div className="lg:col-span-8">
             <div className="bg-glass backdrop-blur-md p-8 md:p-10 rounded-[2rem] border border-white/10 shadow-2xl relative overflow-hidden min-h-[500px] flex flex-col">
               
-              <h2 className="text-3xl font-bold text-white mb-8 flex items-center gap-4 relative z-10">
-                {isMod ? (
-                    <>
-                        <div className="p-3 bg-indigo-500/20 rounded-xl border border-indigo-500/30">
-                            <ComputerDesktopIcon className="w-8 h-8 text-indigo-400" />
-                        </div>
-                        <div>
+              <div className="flex justify-between items-start mb-8">
+                <h2 className="text-3xl font-bold text-white flex items-center gap-4 relative z-10">
+                    {isMod ? (
+                        <>
+                            <div className="p-3 bg-indigo-500/20 rounded-xl border border-indigo-500/30">
+                                <ComputerDesktopIcon className="w-8 h-8 text-indigo-400" />
+                            </div>
                             <span>Yönetim Paneli</span>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="p-3 bg-blue-500/20 rounded-xl border border-blue-500/30">
-                            <ShareIcon className="w-8 h-8 text-blue-400" />
-                        </div>
-                        <div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-3 bg-blue-500/20 rounded-xl border border-blue-500/30">
+                                <ShareIcon className="w-8 h-8 text-blue-400" />
+                            </div>
                             <span>Link Gönderimi</span>
-                        </div>
-                    </>
-                )}
-              </h2>
+                        </>
+                    )}
+                </h2>
+                
+                <div className="flex flex-col items-end gap-1">
+                     <span className="text-xs text-gray-500 font-bold uppercase">Oda Numarası</span>
+                     <button onClick={handleCopyLink} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1 rounded-lg border border-white/5 transition-colors">
+                        <span className="font-mono font-bold text-indigo-300">#{roomId}</span>
+                        {copied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <LinkIcon className="w-4 h-4 text-gray-400" />}
+                     </button>
+                </div>
+              </div>
               
               {isMod ? (
-                // MODERATOR VIEW
+                // MODERATOR
                 <div className="flex flex-col h-full relative z-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div className="bg-gray-800/50 p-6 rounded-2xl border border-white/5">
@@ -230,7 +239,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                      </div>
                   </div>
                   
-                  {/* Timer Settings */}
                   <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-2xl p-6 mb-6">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-indigo-300 font-bold flex items-center gap-2">
@@ -262,7 +270,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </button>
                 </div>
               ) : (
-                // USER SUBMISSION VIEW
+                // USER
                 hasSubmitted ? (
                   <div className="flex flex-col items-center justify-center h-full text-center relative z-10">
                     <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mb-6 ring-4 ring-green-500/20">
