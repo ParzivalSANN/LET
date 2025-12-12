@@ -1,6 +1,6 @@
 import { GameState, INITIAL_STATE } from '../types';
 import { db } from './firebase';
-import { ref, onValue, set, off } from 'firebase/database';
+import { ref, onValue, set, off, get, child } from 'firebase/database';
 
 const STORAGE_KEY_PREFIX = 'linkyaris_gamestate_';
 
@@ -42,6 +42,28 @@ const sanitizeState = (state: any): GameState => {
 
 let currentRef: any = null;
 let currentCallback: ((state: GameState) => void) | null = null;
+
+/**
+ * Checks if a room exists without creating it or subscribing to it.
+ */
+export const doesRoomExist = async (roomId: string): Promise<boolean> => {
+  const localKey = `${STORAGE_KEY_PREFIX}${roomId}`;
+  
+  if (isOffline) {
+    // Check Local Storage
+    return !!localStorage.getItem(localKey);
+  } else {
+    // Check Firebase
+    try {
+      const dbRef = ref(db);
+      const snapshot = await get(child(dbRef, `games/${roomId}`));
+      return snapshot.exists();
+    } catch (error) {
+      console.error("Error checking room existence:", error);
+      return false;
+    }
+  }
+};
 
 export const subscribeToGame = (roomId: string, callback: (state: GameState) => void) => {
   // Unsubscribe from previous if exists

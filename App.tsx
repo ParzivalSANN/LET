@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_STATE, GameState, AppStatus, User, Submission } from './types';
-import { subscribeToGame, saveState, resetGame, isOnlineMode } from './services/storageService';
+import { subscribeToGame, saveState, resetGame, isOnlineMode, doesRoomExist } from './services/storageService';
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
@@ -16,6 +16,7 @@ const App: React.FC = () => {
   // Pending login state to handle the async nature of connecting to a room then joining
   const [pendingLogin, setPendingLogin] = useState<{name: string, password?: string, isMod: boolean} | null>(null);
   const [loginError, setLoginError] = useState<string>('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // Initialize Room from URL
   useEffect(() => {
@@ -117,19 +118,37 @@ const App: React.FC = () => {
   };
 
   // Handlers triggered by UI
-  const handleConnectAndJoin = (roomInput: string, name: string, password?: string, isMod: boolean = false) => {
+  const handleConnectAndJoin = async (roomInput: string, name: string, password?: string, isMod: boolean = false) => {
       const cleanRoom = roomInput.trim();
       if (!cleanRoom) return false;
 
+      setIsVerifying(true);
+      setLoginError('');
+
+      // If user is NOT a mod, check if room exists first
+      if (!isMod) {
+          // If we are already in this room and just logging in again, skip check (optional, but safer to check)
+          if (roomId !== cleanRoom) {
+              const exists = await doesRoomExist(cleanRoom);
+              if (!exists) {
+                  setLoginError('Böyle bir oda bulunamadı. Sadece moderatör oda oluşturabilir.');
+                  setIsVerifying(false);
+                  return false;
+              }
+          }
+      }
+
       // If we are already in this room, try to join immediately
       if (roomId === cleanRoom) {
+          setIsVerifying(false); // Stop verifying spinner, executeJoin will run synchronously
           return executeJoin(name, password, isMod);
       }
 
       // If switching rooms or first time
       setRoomId(cleanRoom);
       setPendingLogin({ name, password, isMod });
-      return true; // Return true to indicate process started (UI shows loading)
+      setIsVerifying(false); // Pending login state will take over the loading UI
+      return true; 
   };
 
   const handleSubmitLink = (url: string, description: string) => {
@@ -318,12 +337,12 @@ const App: React.FC = () => {
             currentUser={null}
             users={[]}
             submissions={[]}
-            onJoin={(name, password, isMod, roomInput) => handleConnectAndJoin(roomInput || roomId || "", name, password, isMod)}
+            onJoin={handleConnectAndJoin}
             onSubmitLink={() => {}}
             onStartGame={() => {}}
             isMod={false}
             externalError={loginError}
-            isLoading={!!pendingLogin}
+            isLoading={!!pendingLogin || isVerifying}
           />
         )}
 

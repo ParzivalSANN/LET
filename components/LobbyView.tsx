@@ -7,7 +7,8 @@ interface LobbyViewProps {
   currentUser: User | null;
   users: User[];
   submissions: Submission[];
-  onJoin: (name: string, password?: string, isMod?: boolean, roomInput?: string) => boolean; 
+  // onJoin might return a Promise (async check) or boolean/void
+  onJoin: (name: string, password?: string, isMod?: boolean, roomInput?: string) => Promise<boolean> | boolean | void; 
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: (duration: number) => void;
   isMod: boolean;
