@@ -4,7 +4,7 @@ import { subscribeToGame, saveState, resetGame, isOnlineMode } from './services/
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
-import { CloudIcon, WifiIcon, SignalSlashIcon } from '@heroicons/react/24/outline';
+import { CloudIcon, WifiIcon, SignalSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
@@ -248,15 +248,18 @@ const App: React.FC = () => {
       </div>
 
       {!isOnline && (
-        <div className="max-w-7xl mx-auto mb-6 bg-yellow-900/20 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
-            <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500">
-                <CloudIcon className="w-6 h-6" />
+        <div className="max-w-7xl mx-auto mb-6 bg-red-900/20 border border-red-500/30 rounded-xl p-6 flex flex-col md:flex-row items-start gap-4 animate-pulse-slow">
+            <div className="bg-red-500/20 p-3 rounded-xl text-red-500 shrink-0">
+                <ExclamationTriangleIcon className="w-8 h-8" />
             </div>
             <div>
-                <h4 className="font-bold text-yellow-500 text-sm">Offline Mod (Demo)</h4>
-                <p className="text-xs text-yellow-200/70 mt-1">
-                    Şu anda veritabanı bağlantısı yok. Yaptığınız işlemler sadece bu tarayıcıda çalışır. 
-                    Çok oyunculu mod için Netlify Environment Variables ayarlarında Firebase Config bilgilerini girmelisiniz.
+                <h4 className="font-black text-red-400 text-lg mb-1">DİKKAT: Veritabanı Bağlı Değil!</h4>
+                <p className="text-sm text-red-200/80 leading-relaxed">
+                    Şu an <strong>Offline (Demo) Moddasınız</strong>. Yaptığınız hiçbir işlem (oylamalar, linkler) diğer cihazlara gitmez.
+                    <br />
+                    Başka cihazlardan (telefon, tablet) siteyi açsanız bile, herkes <strong>kendi ayrı oyununu</strong> görür.
+                    <br />
+                    <span className="text-white font-bold mt-2 block">Çok oyunculu oynamak için Firebase ayarlarını yapmalısınız.</span>
                 </p>
             </div>
         </div>

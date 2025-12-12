@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
+    server: {
+      host: true, // CRITICAL: Allows external devices (like phones) on the same network to access the server
+      port: 5173  // Default port, ensuring consistency
+    },
     define: {
       // Polyfill process.env for the browser to support GoogleGenAI and Firebase config
       'process.env': env
