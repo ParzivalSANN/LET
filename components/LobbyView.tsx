@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Submission } from '../types';
 import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon } from '@heroicons/react/24/outline';
 
@@ -7,10 +7,13 @@ interface LobbyViewProps {
   currentUser: User | null;
   users: User[];
   submissions: Submission[];
-  onJoin: (name: string, password?: string, isMod?: boolean) => boolean; 
+  // Updated onJoin signature to accept roomInput from the login form
+  onJoin: (name: string, password?: string, isMod?: boolean, roomInput?: string) => boolean; 
   onSubmitLink: (url: string, desc: string) => void;
   onStartGame: (duration: number) => void;
   isMod: boolean;
+  externalError?: string;
+  isLoading?: boolean;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -21,24 +24,44 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onJoin,
   onSubmitLink,
   onStartGame,
-  isMod
+  isMod,
+  externalError,
+  isLoading
 }) => {
   const safeUsers = users || [];
   const safeSubmissions = submissions || [];
 
+  // Login States
+  const [roomInput, setRoomInput] = useState(roomId || '');
   const [name, setName] = useState('');
   const [userPassword, setUserPassword] = useState(''); 
-  const [viewMode, setViewMode] = useState<'user' | 'admin'>('user');
+  const [isModLogin, setIsModLogin] = useState(false); // Toggle between User/Mod
+  
+  // Mod Specifics
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   
+  // Game Settings States
   const [duration, setDuration] = useState(30);
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
 
   const hasSubmitted = currentUser && safeSubmissions.some(s => s.userId === currentUser.id);
+
+  // Sync prop roomId to local input if it changes from URL
+  useEffect(() => {
+    if (roomId) setRoomInput(roomId);
+  }, [roomId]);
+
+  useEffect(() => {
+    if (externalError) {
+        setError(externalError);
+        setTimeout(() => setError(''), 4000);
+    }
+  }, [externalError]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -46,26 +69,37 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleModLogin = () => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail === 'berkay-34ist@hotmail.com' && password === '123321') {
-      const success = onJoin('Moderatör', "", true);
-      if (!success) setError("Giriş başarısız. Oturum hatası.");
-    } else {
-      setError('Hatalı e-posta veya şifre!');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  const handleUserLogin = () => {
-    if (!name.trim() || !userPassword.trim()) {
-        setError('Lütfen adını ve şifreni gir.');
+  const handleJoinClick = () => {
+    setError('');
+    
+    if (!roomInput.trim()) {
+        setError('Oda kodunu girmelisin.');
         return;
     }
-    const success = onJoin(name, userPassword, false);
-    if (!success) {
-        setError('Bu isim kullanılıyor ve şifre hatalı!');
-        setTimeout(() => setError(''), 3000);
+
+    if (isModLogin) {
+        // Moderator Login
+        const cleanEmail = email.trim().toLowerCase();
+        if (cleanEmail === 'berkay-34ist@hotmail.com' && adminPassword === '123321') {
+           onJoin('Moderatör', "", true, roomInput);
+        } else {
+           setError('Hatalı yönetici bilgileri!');
+        }
+    } else {
+        // User Login
+        if (!name.trim()) {
+            setError('İsmini girmelisin.');
+            return;
+        }
+        if (name.length > 12) {
+            setError('İsim çok uzun.');
+            return;
+        }
+        if (!userPassword.trim() || userPassword.length < 4) {
+             setError('Şifre en az 4 karakter olmalı.');
+             return;
+        }
+        onJoin(name, userPassword, false, roomInput);
     }
   };
 
@@ -78,117 +112,129 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     onSubmitLink(formattedUrl, desc);
   };
 
-  // 1. LOGIN SCREEN
+  // 1. LOGIN SCREEN (Matches the requested dark blue card design)
   if (!currentUser) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in relative px-4">
-        {/* Room Info Banner */}
-        <div className="mb-6 flex flex-col items-center gap-2">
-            <span className="text-gray-400 text-sm font-bold uppercase tracking-widest">Şu anki Oda</span>
-            <div className="bg-indigo-900/40 border border-indigo-500/30 px-6 py-2 rounded-full font-mono text-xl text-indigo-300 font-bold flex items-center gap-3">
-                #{roomId}
-                <button onClick={handleCopyLink} className="hover:text-white transition-colors" title="Linki Kopyala">
-                    {copied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <LinkIcon className="w-5 h-5" />}
+      <div className="flex flex-col items-center justify-center min-h-[90vh] animate-fade-in relative px-4">
+        
+        {/* Main Card */}
+        <div className="bg-[#1e1b4b]/80 backdrop-blur-xl p-8 md:p-10 rounded-[2.5rem] shadow-2xl border border-indigo-500/20 w-full max-w-[400px] relative overflow-hidden transition-all duration-500 ring-1 ring-white/10">
+          
+          {/* Header */}
+          <div className="text-center mb-8 relative z-10">
+            <h1 className="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-lg">
+              Link<span className="text-[#818cf8]">Yarış</span>
+            </h1>
+            <p className="text-gray-400 text-sm font-medium tracking-wide">Oda kodunu gir ve katıl!</p>
+          </div>
+
+          <div className="space-y-5 relative z-10">
+            
+            {/* Room Code Field */}
+            <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">ODA KODU</label>
+                <input
+                    type="text" // numeric input might show arrows, text is safer for styling
+                    inputMode="numeric"
+                    value={roomInput}
+                    onChange={(e) => setRoomInput(e.target.value)}
+                    className="w-full bg-[#0f172a]/60 border border-indigo-500/30 rounded-xl py-4 text-center text-3xl font-black text-white focus:ring-2 focus:ring-[#6366f1] focus:border-transparent outline-none tracking-[0.5em] placeholder-gray-700 transition-all font-mono shadow-inner"
+                    placeholder="0000"
+                    maxLength={4}
+                />
+            </div>
+
+            {isModLogin ? (
+                 // Mod Fields
+                 <>
+                    <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">E-POSTA</label>
+                        <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full bg-[#0f172a]/60 border border-gray-700/50 rounded-xl px-4 py-4 text-white text-lg focus:ring-2 focus:ring-[#6366f1] outline-none font-medium placeholder-gray-600 transition-all"
+                        placeholder="admin@mail.com"
+                        />
+                    </div>
+                    <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">ŞİFRE</label>
+                        <input
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full bg-[#0f172a]/60 border border-gray-700/50 rounded-xl px-4 py-4 text-white text-lg focus:ring-2 focus:ring-[#6366f1] outline-none tracking-widest placeholder-gray-600 transition-all"
+                        placeholder="••••"
+                        />
+                    </div>
+                 </>
+            ) : (
+                // User Fields
+                <>
+                    <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">İSMİN</label>
+                        <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full bg-[#0f172a]/60 border border-gray-700/50 rounded-xl px-4 py-4 text-white text-lg focus:ring-2 focus:ring-[#6366f1] outline-none font-medium placeholder-gray-600 transition-all"
+                        placeholder="Ali"
+                        />
+                    </div>
+                    
+                    <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">ŞİFRE</label>
+                        <input
+                        type="password"
+                        value={userPassword}
+                        onChange={(e) => setUserPassword(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleJoinClick()}
+                        className="w-full bg-[#0f172a]/60 border border-gray-700/50 rounded-xl px-4 py-4 text-white text-lg focus:ring-2 focus:ring-[#6366f1] outline-none tracking-widest placeholder-gray-600 transition-all"
+                        placeholder="••••"
+                        />
+                        <div className="text-[10px] text-gray-500 text-right pr-1">Min. 4 karakter</div>
+                    </div>
+                </>
+            )}
+
+            {error && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold text-center py-3 rounded-xl animate-bounce-short">
+                    {error}
+                </div>
+            )}
+
+            <button
+              onClick={handleJoinClick}
+              disabled={isLoading}
+              className="w-full bg-[#5b21b6] hover:bg-[#4c1d95] text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-[#5b21b6]/40 flex items-center justify-center gap-2 text-lg group mt-2"
+            >
+              {isLoading ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              ) : (
+                  <>
+                    {isModLogin ? 'Yönetici Girişi' : 'Odaya Katıl'} 
+                    <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+              )}
+            </button>
+            
+            {/* Moderator Toggle Link */}
+            <div className="text-center pt-4">
+                <button 
+                    onClick={() => { setIsModLogin(!isModLogin); setError(''); }}
+                    className="text-gray-500 text-xs font-bold hover:text-indigo-400 transition-colors underline decoration-gray-700 underline-offset-4 hover:decoration-indigo-500"
+                >
+                    {isModLogin ? 'Katılımcı Girişine Dön' : 'Yönetici Girişi'}
                 </button>
             </div>
-            {copied && <span className="text-xs text-green-400 font-bold animate-fade-in">Link kopyalandı! Arkadaşına gönder.</span>}
-        </div>
 
-        <div className="bg-glass backdrop-blur-2xl p-8 md:p-10 rounded-[2rem] shadow-2xl border border-white/10 w-full max-w-md relative overflow-hidden transition-all duration-500">
-          <div className="text-center mb-8 relative z-10">
-            <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">
-              Link<span className="text-indigo-400">Yarış</span>
-            </h1>
-            <p className="text-gray-400 text-sm font-medium">Linkini paylaş, puanları topla!</p>
-          </div>
-
-          <div className="flex border-b border-white/10 mb-6 relative z-10">
-            <button
-              onClick={() => { setViewMode('user'); setError(''); }}
-              className={`flex-1 pb-3 text-sm font-bold transition-all ${viewMode === 'user' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Katılımcı Girişi
-            </button>
-            <button
-              onClick={() => { setViewMode('admin'); setError(''); }}
-              className={`flex-1 pb-3 text-sm font-bold transition-all ${viewMode === 'admin' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Yönetici Girişi
-            </button>
-          </div>
-
-          <div className="relative z-10">
-            {viewMode === 'admin' ? (
-              <div className="space-y-4 animate-fade-in">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="Yönetici E-Posta"
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="Şifre"
-                />
-                {error && <div className="text-red-400 text-xs font-bold text-center">{error}</div>}
-                <button
-                  onClick={handleModLogin}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg"
-                >
-                  Panel Girişi
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4 animate-fade-in">
-                <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Takma Adın</label>
-                    <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white text-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold placeholder-gray-600"
-                    placeholder="Örn: Ahmet"
-                    autoFocus
-                    />
-                </div>
-                
-                <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1 flex justify-between">
-                        <span>Giriş Şifresi</span>
-                        <span className="text-[10px] text-gray-600 normal-case">(Tekrar giriş için gerekli)</span>
-                    </label>
-                    <input
-                    type="password"
-                    value={userPassword}
-                    onChange={(e) => setUserPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleUserLogin()}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white text-lg focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-600"
-                    placeholder="****"
-                    />
-                </div>
-
-                {error && <div className="text-red-400 text-xs font-bold text-center bg-red-500/10 py-2 rounded-lg">{error}</div>}
-
-                <button
-                  onClick={handleUserLogin}
-                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-4 px-4 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/25 flex items-center justify-center gap-2 mt-2"
-                >
-                  <span>Yarışmaya Katıl</span>
-                  <ArrowRightIcon className="w-5 h-5" />
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. LOBBY INTERFACE
+  // 2. LOBBY INTERFACE (Logged In)
   return (
     <div className="max-w-7xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
@@ -226,7 +272,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
               
               {isMod ? (
-                // MODERATOR
+                // MODERATOR VIEW
                 <div className="flex flex-col h-full relative z-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div className="bg-gray-800/50 p-6 rounded-2xl border border-white/5">
@@ -270,7 +316,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </button>
                 </div>
               ) : (
-                // USER
+                // USER VIEW
                 hasSubmitted ? (
                   <div className="flex flex-col items-center justify-center h-full text-center relative z-10">
                     <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mb-6 ring-4 ring-green-500/20">

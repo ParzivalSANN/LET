@@ -4,18 +4,20 @@ import { subscribeToGame, saveState, resetGame, isOnlineMode } from './services/
 import { LobbyView } from './components/LobbyView';
 import { VotingView } from './components/VotingView';
 import { ResultsView } from './components/ResultsView';
-import { CloudIcon, WifiIcon, SignalSlashIcon, ExclamationTriangleIcon, HashtagIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { WifiIcon, SignalSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
   // Room ID Logic
   const [roomId, setRoomId] = useState<string | null>(null);
-  const [tempRoomInput, setTempRoomInput] = useState('');
-
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isOnline, setIsOnline] = useState(false);
+  
+  // Pending login state to handle the async nature of connecting to a room then joining
+  const [pendingLogin, setPendingLogin] = useState<{name: string, password?: string, isMod: boolean} | null>(null);
+  const [loginError, setLoginError] = useState<string>('');
 
-  // Initialize Room from URL or Session
+  // Initialize Room from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlRoom = params.get('room');
@@ -25,24 +27,41 @@ const App: React.FC = () => {
     setIsOnline(isOnlineMode());
   }, []);
 
-  // Sync state from Storage Service (Firebase or LocalStorage)
+  // Sync state from Storage Service
   useEffect(() => {
     if (!roomId) return;
 
-    // Update URL without reloading to allow easy sharing
+    // Update URL without reloading
     const url = new URL(window.location.href);
     url.searchParams.set('room', roomId);
     window.history.replaceState({}, '', url);
 
-    // Subscribe to changes for this specific room
     const unsubscribe = subscribeToGame(roomId, (newState) => {
       setGameState(newState);
     });
 
     return () => {
-      // Unsubscribe logic handled inside service
+      // Cleanup managed by service
     };
   }, [roomId]);
+
+  // Handle Pending Login (Wait for GameState to load after setting RoomID)
+  useEffect(() => {
+    if (pendingLogin && gameState && roomId) {
+        // Try to join now that we have state
+        const success = executeJoin(pendingLogin.name, pendingLogin.password, pendingLogin.isMod);
+        if (success) {
+            setPendingLogin(null); // Clear pending
+            setLoginError('');
+        } else {
+            // Only set error if we are sure data is loaded (users array exists)
+            // For a new room, users might be empty, which is fine for new user
+            // But if it's a mod login failure or password mismatch, we handle it.
+            setPendingLogin(null);
+            setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
+        }
+    }
+  }, [gameState, pendingLogin, roomId]);
 
   // Restore user session
   useEffect(() => {
@@ -56,48 +75,61 @@ const App: React.FC = () => {
      }
   }, []);
 
-  const handleRoomEnter = () => {
-    if (!tempRoomInput.trim()) return;
-    setRoomId(tempRoomInput.trim());
+  // Actual Logic to Modify State
+  const executeJoin = (name: string, password?: string, isMod: boolean = false): boolean => {
+      if (!roomId) return false;
+
+      const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
+      const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
+      let userToSet: User;
+  
+      if (existingUser) {
+        if (!isMod) {
+           const storedPassword = existingUser.password || "";
+           const inputPassword = password || "";
+           if (storedPassword !== inputPassword) {
+               return false;
+           }
+        }
+        userToSet = { ...existingUser, password: existingUser.password || "" };
+      } else {
+        // If mod, allow creation anytime. If user, ensure name isn't taken by a different type
+        if (gameState.users.some(u => u.name === finalName)) return false;
+
+        userToSet = {
+          id: crypto.randomUUID(),
+          name: finalName,
+          isMod: isMod,
+          joinedAt: Date.now(),
+          password: password || ""
+        };
+        
+        const newState = {
+          ...gameState,
+          users: [...gameState.users, userToSet]
+        };
+        saveState(roomId, newState);
+      }
+  
+      setCurrentUser(userToSet);
+      localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
+      return true;
   };
 
-  // Handlers
-  const handleJoin = (name: string, password?: string, isMod: boolean = false): boolean => {
-    if (!roomId) return false;
+  // Handlers triggered by UI
+  const handleConnectAndJoin = (roomInput: string, name: string, password?: string, isMod: boolean = false) => {
+      const cleanRoom = roomInput.trim();
+      if (!cleanRoom) return false;
 
-    const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
-    
-    const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
-    let userToSet: User;
-
-    if (existingUser) {
-      if (!isMod) {
-         const storedPassword = existingUser.password || "";
-         const inputPassword = password || "";
-         if (storedPassword !== inputPassword) {
-             return false;
-         }
+      // If we are already in this room, try to join immediately
+      if (roomId === cleanRoom) {
+          return executeJoin(name, password, isMod);
       }
-      userToSet = { ...existingUser, password: existingUser.password || "" };
-    } else {
-      userToSet = {
-        id: crypto.randomUUID(),
-        name: finalName,
-        isMod: isMod,
-        joinedAt: Date.now(),
-        password: password || ""
-      };
-      
-      const newState = {
-        ...gameState,
-        users: [...gameState.users, userToSet]
-      };
-      saveState(roomId, newState);
-    }
 
-    setCurrentUser(userToSet);
-    localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
-    return true;
+      // If switching rooms or first time
+      setRoomId(cleanRoom);
+      setPendingLogin({ name, password, isMod });
+      return true; // Return true to indicate process started (UI shows loading)
   };
 
   const handleSubmitLink = (url: string, description: string) => {
@@ -197,49 +229,9 @@ const App: React.FC = () => {
   const handleSignOut = () => {
     localStorage.removeItem('linkyaris_user_session');
     setCurrentUser(null);
+    setRoomId(null); // Optional: Clear room on sign out? Let's keep room for UX.
+    window.location.href = window.location.pathname; // Hard reset to clear URL params and state
   };
-
-  // ROOM SELECTION SCREEN
-  if (!roomId) {
-    return (
-      <div className="min-h-screen text-gray-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-glass backdrop-blur-2xl p-8 md:p-12 rounded-[2rem] shadow-2xl border border-white/10 w-full max-w-md text-center">
-            <div className="mb-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center font-bold text-3xl shadow-[0_0_20px_rgba(99,102,241,0.5)] mb-4">
-                    LY
-                </div>
-                <h1 className="text-3xl font-extrabold text-white">LinkYarış</h1>
-                <p className="text-gray-400 mt-2">Yarışmaya başlamak için bir oda numarası gir.</p>
-            </div>
-            
-            <div className="space-y-4">
-                <div className="relative">
-                    <HashtagIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-indigo-400" />
-                    <input 
-                        type="text" 
-                        value={tempRoomInput}
-                        onChange={(e) => setTempRoomInput(e.target.value)}
-                        placeholder="Oda Numarası (Örn: 101)"
-                        className="w-full bg-gray-900/50 border border-gray-700 rounded-xl pl-12 pr-4 py-4 text-white text-lg focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
-                        onKeyDown={(e) => e.key === 'Enter' && handleRoomEnter()}
-                    />
-                </div>
-                <button 
-                    onClick={handleRoomEnter}
-                    disabled={!tempRoomInput.trim()}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                    Odaya Gir <ArrowRightIcon className="w-5 h-5" />
-                </button>
-            </div>
-            
-            <p className="text-xs text-gray-500 mt-6">
-                Arkadaşlarınla aynı odaya girmeyi unutma!
-            </p>
-        </div>
-      </div>
-    );
-  }
 
   const currentSubmission = 
     gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 
@@ -249,7 +241,8 @@ const App: React.FC = () => {
   // Render Logic
   return (
     <div className="min-h-screen text-gray-100 p-4 md:p-8 font-sans">
-      {/* Top Bar */}
+      {/* Top Bar - Only show if logged in */}
+      {currentUser && (
       <div className="flex justify-between items-center max-w-7xl mx-auto mb-8 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm">
@@ -273,8 +266,7 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {currentUser && (
-          <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
               <div className="flex items-center gap-4 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
                 <div className="text-gray-200">
                   {currentUser.isMod ? (
@@ -299,11 +291,11 @@ const App: React.FC = () => {
               >
                 Çıkış
               </button>
-          </div>
-        )}
+        </div>
       </div>
+      )}
 
-      {!isOnline && (
+      {!isOnline && currentUser && (
         <div className="max-w-7xl mx-auto mb-6 bg-red-900/20 border border-red-500/30 rounded-xl p-6 flex flex-col md:flex-row items-start gap-4 animate-pulse-slow">
             <div className="bg-red-500/20 p-3 rounded-xl text-red-500 shrink-0">
                 <ExclamationTriangleIcon className="w-8 h-8" />
@@ -311,9 +303,7 @@ const App: React.FC = () => {
             <div>
                 <h4 className="font-black text-red-400 text-lg mb-1">DİKKAT: Veritabanı Bağlı Değil!</h4>
                 <p className="text-sm text-red-200/80 leading-relaxed">
-                    Şu an <strong>Offline Moddasınız</strong>. Çok oyunculu mod için Firebase ayarları gereklidir.
-                    <br/>
-                    Diğer cihazlardan giriş yapmak için bilgisayarınızın IP adresini kullanın (Örn: 192.168.1.35:5173).
+                    Offline Moddasınız.
                 </p>
             </div>
         </div>
@@ -321,20 +311,36 @@ const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
-        {gameState.status === AppStatus.LOBBY && (
-          <LobbyView 
-            roomId={roomId}
-            currentUser={currentUser}
-            users={gameState.users}
-            submissions={gameState.submissions}
-            onJoin={handleJoin}
-            onSubmitLink={handleSubmitLink}
-            onStartGame={handleStartGame}
-            isMod={currentUser?.isMod || false}
+        {(!currentUser) && (
+          // LOGIN SCREEN (Managed by LobbyView now acts as Login View)
+           <LobbyView 
+            roomId={roomId || ""}
+            currentUser={null}
+            users={[]}
+            submissions={[]}
+            onJoin={(name, password, isMod, roomInput) => handleConnectAndJoin(roomInput || roomId || "", name, password, isMod)}
+            onSubmitLink={() => {}}
+            onStartGame={() => {}}
+            isMod={false}
+            externalError={loginError}
+            isLoading={!!pendingLogin}
           />
         )}
 
-        {gameState.status === AppStatus.VOTING && currentUser && (
+        {currentUser && gameState.status === AppStatus.LOBBY && (
+          <LobbyView 
+            roomId={roomId || ""}
+            currentUser={currentUser}
+            users={gameState.users}
+            submissions={gameState.submissions}
+            onJoin={() => true} // Already joined
+            onSubmitLink={handleSubmitLink}
+            onStartGame={handleStartGame}
+            isMod={currentUser.isMod}
+          />
+        )}
+
+        {currentUser && gameState.status === AppStatus.VOTING && (
           currentSubmission ? (
             <VotingView 
               key={gameState.currentSubmissionIndex}
@@ -359,11 +365,11 @@ const App: React.FC = () => {
           )
         )}
 
-        {gameState.status === AppStatus.RESULTS && (
+        {currentUser && gameState.status === AppStatus.RESULTS && (
           <ResultsView 
             submissions={gameState.submissions}
             onReset={handleReset}
-            isMod={currentUser?.isMod || false}
+            isMod={currentUser.isMod}
           />
         )}
       </main>
