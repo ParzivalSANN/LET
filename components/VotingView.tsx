@@ -49,6 +49,9 @@ export const VotingView: React.FC<VotingViewProps> = ({
       );
   }
 
+  // Detect if current user is the owner of the submission
+  const isOwner = currentUser.id === currentSubmission.userId;
+
   // Safe access to votes object to prevent crash
   const currentVotes = currentSubmission.votes || {};
 
@@ -88,8 +91,9 @@ export const VotingView: React.FC<VotingViewProps> = ({
       if (remaining === 0) {
         setHasTimedOut(true);
         // If time is up and user hasn't voted, cast a blank vote (0)
+        // EXCEPTION: Don't auto-vote if it is the owner or moderator
         const myVote = (currentSubmission.votes || {})[currentUser.id];
-        if (myVote === undefined && !isMod) {
+        if (myVote === undefined && !isMod && !isOwner) {
            handleVote(0);
         }
       } else {
@@ -103,7 +107,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [roundEndTime, currentSubmission.id, currentUser.id, isMod, currentSubmission.votes]);
+  }, [roundEndTime, currentSubmission.id, currentUser.id, isMod, currentSubmission.votes, isOwner]);
 
   const handleVote = (score: number) => {
     setSelectedScore(score);
@@ -120,12 +124,36 @@ export const VotingView: React.FC<VotingViewProps> = ({
   };
 
   // Calculate stats for Moderator
-  const activeVotersCount = users.filter(u => !u.isMod).length; 
+  // FIX: Exclude the owner from the active voters count so 100% progress is possible without their vote
+  const activeVotersCount = users.filter(u => !u.isMod && u.id !== currentSubmission.userId).length; 
   // FIX: Ensure Object.keys doesn't crash on undefined
   const currentVotesCount = Object.keys(currentVotes).length;
+  
   const progressPercent = activeVotersCount > 0 ? (currentVotesCount / activeVotersCount) * 100 : 0;
 
-  // Render "Waiting" screen if user voted or timed out
+  // 1. OWNER VIEW (Waiting for others)
+  // If user is owner and not mod, show waiting screen immediately
+  if (isOwner && !isMod) {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[70vh] animate-fade-in text-center px-4">
+              <div className="relative mb-8">
+                  <div className="w-32 h-32 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-3xl font-bold text-white">{timeLeft > 0 ? timeLeft : "0"}</span>
+                  </div>
+              </div>
+              <h2 className="text-4xl font-bold text-white mb-4">Senin Sıran!</h2>
+              <p className="text-xl text-gray-400 max-w-lg">
+                  Linkin diğer kullanıcılar tarafından oylanıyor...
+              </p>
+              <div className="mt-6 bg-indigo-500/20 text-indigo-300 px-6 py-3 rounded-xl border border-indigo-500/30 font-bold text-lg animate-pulse">
+                  Sonuçları bekle...
+              </div>
+          </div>
+      );
+  }
+
+  // 2. WAITING VIEW (User voted or timed out)
   const isWaiting = (selectedScore !== null || hasTimedOut) && !isMod;
 
   if (isWaiting) {
@@ -157,6 +185,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
       );
   }
 
+  // 3. VOTING INTERFACE (For others)
   return (
     <div className="max-w-7xl mx-auto flex flex-col min-h-[75vh]">
       {/* Header Info */}
