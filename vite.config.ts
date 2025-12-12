@@ -9,19 +9,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      host: '0.0.0.0', // CRITICAL: Explicitly bind to all network interfaces (IPv4)
-      port: 5173,      // Force port 5173
-      strictPort: true, // Fail if port is busy instead of switching (avoids confusion)
-      cors: true,       // Allow requests from other devices
-      hmr: {
-        // Fix for "WebSocket connection failed" on mobile devices
-        clientPort: 5173,
-      },
-      allowedHosts: true, // Allow any host (tunneling or local IP)
-    },
-    preview: {
-      host: '0.0.0.0',
-      port: 5173,
+      host: true,      // Listen on all addresses (0.0.0.0) automatically
+      port: 5173,      // Keep port consistent
     },
     define: {
       // Polyfill process.env for the browser

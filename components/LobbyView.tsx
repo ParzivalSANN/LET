@@ -63,18 +63,26 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   }, [externalError]);
 
   const handleCopyLink = async () => {
-    // Force HTTP for sharing to avoid SSL errors on local network
-    const currentUrl = window.location.href;
-    const shareableUrl = currentUrl.replace('https://', 'http://');
-
+    const currentUrl = window.location.href.replace('https://', 'http://');
+    
     try {
-      await navigator.clipboard.writeText(shareableUrl);
+      await navigator.clipboard.writeText(currentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      // Fallback if clipboard API fails
-      setError('Manuel kopyalayınız (Aşağıda).');
-      setTimeout(() => setError(''), 4000);
+      // Fallback for HTTP/Mobile where clipboard API might be blocked
+      const input = document.getElementById('share-link-input') as HTMLInputElement;
+      if (input) {
+        input.select();
+        input.setSelectionRange(0, 99999); // For mobile devices
+        try {
+            document.execCommand('copy');
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (e) {
+            setError('Lütfen linki manuel kopyala.');
+        }
+      }
     }
   };
 
@@ -282,27 +290,28 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                      <div className="bg-indigo-900/40 border border-indigo-500/30 rounded-xl p-3 w-full md:w-80">
                          <div className="flex items-center gap-2 mb-2">
                              <SignalIcon className="w-4 h-4 text-indigo-400" />
-                             <span className="text-[10px] font-bold text-indigo-200 uppercase">Paylaşılabilir Link (Sadece HTTP)</span>
+                             <span className="text-[10px] font-bold text-indigo-200 uppercase">IP Linki (Manuel Kopyala)</span>
                          </div>
                          <div className="flex items-center gap-2">
                              <input 
+                               id="share-link-input"
                                readOnly
                                value={window.location.href.replace('https://', 'http://')}
-                               className="w-full bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-300 font-mono focus:outline-none select-all"
+                               className="w-full bg-black/30 border border-white/10 rounded-lg px-2 py-3 text-sm text-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 select-all cursor-text"
                                onClick={(e) => e.currentTarget.select()}
                              />
                              <button 
                                 onClick={handleCopyLink}
-                                className="bg-indigo-600 hover:bg-indigo-500 p-1.5 rounded-lg text-white transition-colors shrink-0"
+                                className="bg-indigo-600 hover:bg-indigo-500 p-3 rounded-lg text-white transition-colors shrink-0"
                                 title="Kopyala"
                              >
-                                {copied ? <CheckIcon className="w-4 h-4" /> : <ClipboardDocumentIcon className="w-4 h-4" />}
+                                {copied ? <CheckIcon className="w-5 h-5" /> : <ClipboardDocumentIcon className="w-5 h-5" />}
                              </button>
                          </div>
                          <div className="mt-2 flex items-start gap-1.5 text-[10px] text-orange-300/80 leading-relaxed">
                             <ExclamationCircleIcon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                             <span>
-                                <strong>ÖNEMLİ:</strong> Diğer cihazlarda hata alıyorsanız, linkin başındaki "https" kısmını silip "http" yapın.
+                                <strong>DİKKAT:</strong> Telefondan girerken linkin başında <strong>sadece http://</strong> olduğuna emin olun.
                             </span>
                          </div>
                      </div>
