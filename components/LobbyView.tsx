@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Submission } from '../types';
-import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { ShareIcon, UserGroupIcon, ShieldCheckIcon, ArrowRightIcon, ComputerDesktopIcon, ClockIcon, LinkIcon, CheckIcon, ExclamationCircleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 interface LobbyViewProps {
   roomId: string;
@@ -63,10 +63,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     }
   }, [externalError]);
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback if clipboard API fails (common on HTTP connections)
+      setError('Güvenli bağlantı olmadığı için otomatik kopyalanamadı. Linki aşağıdan manuel alabilirsin.');
+      setTimeout(() => setError(''), 4000);
+    }
   };
 
   const handleJoinClick = () => {
@@ -243,7 +249,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         <div className="lg:col-span-8">
             <div className="bg-glass backdrop-blur-md p-8 md:p-10 rounded-[2rem] border border-white/10 shadow-2xl relative overflow-hidden min-h-[500px] flex flex-col">
               
-              <div className="flex justify-between items-start mb-8">
+              <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-4 relative z-10">
                     {isMod ? (
                         <>
@@ -262,12 +268,42 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     )}
                 </h2>
                 
-                <div className="flex flex-col items-end gap-1">
-                     <span className="text-xs text-gray-500 font-bold uppercase">Oda Numarası</span>
-                     <button onClick={handleCopyLink} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1 rounded-lg border border-white/5 transition-colors">
-                        <span className="font-mono font-bold text-indigo-300">#{roomId}</span>
-                        {copied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <LinkIcon className="w-4 h-4 text-gray-400" />}
-                     </button>
+                {/* Room ID and Link Share - Improved for HTTP/Mobile */}
+                <div className="flex flex-col items-end gap-2 w-full md:w-auto relative z-20">
+                     <span className="text-xs text-gray-500 font-bold uppercase hidden md:block">Oda Numarası</span>
+                     
+                     <div className="flex items-center gap-2 w-full md:w-auto">
+                        <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/10 w-full md:w-auto">
+                           <span className="text-gray-400 text-xs font-bold select-none">ODA:</span>
+                           <span className="font-mono font-bold text-xl text-white tracking-widest">{roomId}</span>
+                        </div>
+                     </div>
+
+                     <div className="flex items-center gap-2 w-full md:w-auto">
+                         <div className="relative flex-1 md:w-64">
+                             <input 
+                               readOnly
+                               value={window.location.href.replace('https://', 'http://')}
+                               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-indigo-200 font-mono focus:outline-none"
+                               onClick={(e) => e.currentTarget.select()}
+                             />
+                         </div>
+                         <button 
+                            onClick={handleCopyLink}
+                            className="bg-indigo-600 hover:bg-indigo-500 p-1.5 rounded-lg text-white transition-colors"
+                            title="Linki Kopyala"
+                         >
+                            {copied ? <CheckIcon className="w-4 h-4" /> : <ClipboardDocumentIcon className="w-4 h-4" />}
+                         </button>
+                     </div>
+                     
+                     {/* Warning only visible if protocol is https but hostname is IP (unlikely) or just general advice */}
+                     <div className="flex items-start gap-1 text-[10px] text-orange-400/80 max-w-xs text-right leading-tight">
+                        <ExclamationCircleIcon className="w-3 h-3 mt-0.5 shrink-0" />
+                        <span>Diğer cihazlardan girerken <strong>http://</strong> kullanın. (s yok)</span>
+                     </div>
+                     
+                     {error && <span className="text-xs text-red-400 font-bold animate-fade-in absolute top-full mt-2 right-0 bg-red-900/90 px-2 py-1 rounded">{error}</span>}
                 </div>
               </div>
               
