@@ -21,6 +21,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onStartGame,
   isMod
 }) => {
+  // Safety checks for arrays
+  const safeUsers = users || [];
+  const safeSubmissions = submissions || [];
+
   // Login States
   const [name, setName] = useState('');
   const [viewMode, setViewMode] = useState<'user' | 'admin'>('user'); // user or admin
@@ -35,7 +39,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
 
-  const hasSubmitted = currentUser && submissions.some(s => s.userId === currentUser.id);
+  const hasSubmitted = currentUser && safeSubmissions.some(s => s.userId === currentUser.id);
 
   const handleModLogin = () => {
     if (email === 'berkay-34ist@hotmail.com' && password === '123321') {
@@ -207,7 +211,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 p-6 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-indigo-500/30 transition-colors">
                         <div>
                             <div className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Aktif Katılımcılar</div>
-                            <div className="text-4xl font-black text-white group-hover:text-indigo-400 transition-colors">{users.length - 1}</div>
+                            <div className="text-4xl font-black text-white group-hover:text-indigo-400 transition-colors">{safeUsers.length - 1}</div>
                         </div>
                         <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-gray-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-all">
                             <UserGroupIcon className="w-6 h-6" />
@@ -216,7 +220,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 p-6 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-green-500/30 transition-colors">
                         <div>
                             <div className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Toplanan Linkler</div>
-                            <div className="text-4xl font-black text-white group-hover:text-green-400 transition-colors">{submissions.length}</div>
+                            <div className="text-4xl font-black text-white group-hover:text-green-400 transition-colors">{safeSubmissions.length}</div>
                         </div>
                         <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-gray-500 group-hover:bg-green-500/20 group-hover:text-green-400 transition-all">
                             <ShareIcon className="w-6 h-6" />
@@ -252,11 +256,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                   <button
                     onClick={() => onStartGame(duration)}
-                    disabled={submissions.length === 0}
+                    disabled={safeSubmissions.length === 0}
                     className="mt-auto w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-5 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-4 text-xl group relative overflow-hidden"
                   >
                     <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                    {submissions.length === 0 ? (
+                    {safeSubmissions.length === 0 ? (
                       <span className="relative z-10 flex items-center gap-2">
                          <span className="w-2 h-2 bg-white rounded-full animate-bounce"></span>
                          Linkler Bekleniyor...
@@ -281,7 +285,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <div className="bg-gray-800/50 rounded-xl p-4 w-full max-w-sm border border-white/5">
                         <div className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-2">Senin Linkin</div>
                         <div className="text-indigo-300 font-mono text-sm truncate px-2">
-                            {submissions.find(s => s.userId === currentUser.id)?.url}
+                            {safeSubmissions.find(s => s.userId === currentUser.id)?.url}
                         </div>
                     </div>
                   </div>
@@ -335,13 +339,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <p className="text-xs text-gray-500 mt-1">Katılımcı Listesi</p>
                 </div>
                 <div className="bg-gray-800/80 px-3 py-1 rounded-lg border border-white/5">
-                    <span className="text-indigo-400 font-bold">{users.length}</span> Kişi
+                    <span className="text-indigo-400 font-bold">{safeUsers.length}</span> Kişi
                 </div>
               </div>
               
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                {users.map((u) => {
-                  const userSubmitted = submissions.some(s => s.userId === u.id);
+                {safeUsers.map((u) => {
+                  const userSubmitted = safeSubmissions.some(s => s.userId === u.id);
                   return (
                     <div key={u.id} className="group flex items-center justify-between bg-gray-800/40 hover:bg-gray-800/60 p-3 rounded-2xl border border-white/5 transition-all duration-300 hover:border-white/10 hover:shadow-lg">
                       <div className="flex items-center gap-3">

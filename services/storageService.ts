@@ -10,12 +10,31 @@ let isOffline = !db;
 // Helper to check if we are online
 export const isOnlineMode = () => !isOffline;
 
+// Helper to ensure state always has required arrays (Fixes 'undefined' errors)
+const sanitizeState = (state: any): GameState => {
+  if (!state) return INITIAL_STATE;
+  return {
+    ...INITIAL_STATE,
+    ...state,
+    users: state.users || [],
+    submissions: state.submissions || [],
+    settings: { ...INITIAL_STATE.settings, ...(state.settings || {}) }
+  };
+};
+
 export const subscribeToGame = (callback: (state: GameState) => void) => {
   if (isOffline) {
     // Local Storage Listener
     const handleStorage = () => {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) callback(JSON.parse(stored));
+        if (stored) {
+            try {
+                callback(sanitizeState(JSON.parse(stored)));
+            } catch (e) {
+                console.error("Storage parse error", e);
+                callback(INITIAL_STATE);
+            }
+        }
     };
     window.addEventListener('storage', handleStorage);
     window.addEventListener('local-storage-update', handleStorage);
@@ -34,7 +53,7 @@ export const subscribeToGame = (callback: (state: GameState) => void) => {
     const unsubscribe = onValue(gameRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        callback(data);
+        callback(sanitizeState(data));
       } else {
         // Initialize DB if empty
         set(gameRef, INITIAL_STATE);
@@ -51,7 +70,7 @@ export const getStoredState = (): GameState => {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return INITIAL_STATE;
   try {
-    return JSON.parse(stored);
+    return sanitizeState(JSON.parse(stored));
   } catch {
     return INITIAL_STATE;
   }

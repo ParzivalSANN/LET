@@ -9,9 +9,11 @@ interface ResultsViewProps {
 }
 
 export const ResultsView: React.FC<ResultsViewProps> = ({ submissions, onReset, isMod }) => {
+  const safeSubmissions = submissions || [];
+  
   // Calculate averages and sort
-  const results = submissions.map(sub => {
-    const scores = Object.values(sub.votes) as number[];
+  const results = safeSubmissions.map(sub => {
+    const scores = sub.votes ? Object.values(sub.votes) as number[] : [];
     const total = scores.reduce((a, b) => a + b, 0);
     const average = scores.length > 0 ? total / scores.length : 0;
     return { ...sub, average, voteCount: scores.length };
