@@ -37,6 +37,15 @@ export const VotingView: React.FC<VotingViewProps> = ({
   // Safe access to votes object to prevent crash
   const currentVotes = currentSubmission.votes || {};
 
+  // Helper to safely get hostname without crashing
+  const getHostname = (urlString: string) => {
+    try {
+      return new URL(urlString).hostname;
+    } catch (e) {
+      return urlString; // Fallback to showing the raw string if invalid
+    }
+  };
+
   // Sync state from server/props
   useEffect(() => {
     // Check if user already voted
@@ -169,7 +178,7 @@ export const VotingView: React.FC<VotingViewProps> = ({
                 </div>
                 <div className="flex flex-col">
                     <span className="text-3xl font-bold text-white mt-4 break-all px-4 tracking-tight">
-                    {new URL(currentSubmission.url).hostname}
+                    {getHostname(currentSubmission.url)}
                     </span>
                     <span className="text-sm text-indigo-400 font-medium mt-1 opacity-0 translate-y-2 group-hover/link:opacity-100 group-hover/link:translate-y-0 transition-all">
                         Siteyi Ziyaret Et &rarr;

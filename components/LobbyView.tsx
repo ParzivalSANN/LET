@@ -64,6 +64,18 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     }
   };
 
+  const handleUrlSubmit = () => {
+    let formattedUrl = url.trim();
+    if (!formattedUrl) return;
+
+    // Fix: Automatically add https:// if missing to prevent URL constructor errors
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = `https://${formattedUrl}`;
+    }
+
+    onSubmitLink(formattedUrl, desc);
+  };
+
   // 1. EKRAN: GİRİŞ EKRANI (Login Screen)
   if (!currentUser) {
     return (
@@ -277,7 +289,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       />
                     </div>
                     <button
-                      onClick={() => url.trim() && onSubmitLink(url, desc)}
+                      onClick={handleUrlSubmit}
                       disabled={!url.trim()}
                       className="w-full mt-auto bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 px-6 rounded-2xl transition-all shadow-xl disabled:opacity-50 text-lg flex items-center justify-center gap-2"
                     >

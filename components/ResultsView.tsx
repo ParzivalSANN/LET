@@ -11,6 +11,15 @@ interface ResultsViewProps {
 export const ResultsView: React.FC<ResultsViewProps> = ({ submissions, onReset, isMod }) => {
   const safeSubmissions = submissions || [];
   
+  // Helper to safely get hostname
+  const getHostname = (urlString: string) => {
+    try {
+      return new URL(urlString).hostname;
+    } catch (e) {
+      return urlString; // Fallback to raw string
+    }
+  };
+
   // Calculate averages and sort
   const results = safeSubmissions.map(sub => {
     const scores = sub.votes ? Object.values(sub.votes) as number[] : [];
@@ -72,7 +81,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ submissions, onReset, 
                   {index === 0 && <span className="ml-3 text-yellow-400 text-xs uppercase tracking-widest border border-yellow-500/50 px-2 py-0.5 rounded-full bg-yellow-500/10">Şampiyon</span>}
                 </h3>
                 <a href={item.url} target="_blank" className="text-gray-500 text-sm hover:text-white hover:underline transition-colors flex items-center gap-1 mt-1">
-                  {new URL(item.url).hostname}
+                  {getHostname(item.url)}
                 </a>
               </div>
             </div>
