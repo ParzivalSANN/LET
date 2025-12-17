@@ -1,373 +1,150 @@
 import React, { useState, useEffect } from 'react';
-import { INITIAL_STATE, GameState, AppStatus, User, Submission } from './types';
-import { subscribeToGame, isOnlineMode, doesRoomExist, addUserToGame, addSubmissionToGame, updateGameStatus, submitVote, updateAiComment, softResetGame, resetGame } from './services/storageService';
-import { LobbyView } from './components/LobbyView';
-import { VotingView } from './components/VotingView';
-import { ResultsView } from './components/ResultsView';
-import { WifiIcon, SignalSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { User, Lobby } from './types';
+import { loginUser, registerUser, getUserJoinedLobbies, createLobby, joinLobby } from './services/storageService';
+import { CHARACTER_POOL } from './data/characters';
+import Dashboard from './components/Dashboard';
+import LoginView from './components/LoginView';
+import PersistentLobbyView from './components/PersistentLobbyView';
+import { PowerIcon, Squares2X2Icon, TrophyIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
-  // Room ID Logic
-  const [roomId, setRoomId] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
-  
-  // Pending login state to handle the async nature of connecting to a room then joining
-  const [pendingLogin, setPendingLogin] = useState<{name: string, password?: string, isMod: boolean} | null>(null);
-  const [loginError, setLoginError] = useState<string>('');
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeLobbyId, setActiveLobbyId] = useState<string | null>(null);
+  const [joinedLobbies, setJoinedLobbies] = useState<Lobby[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Initialize Room from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlRoom = params.get('room');
-    if (urlRoom) {
-      setRoomId(urlRoom);
+    const saved = localStorage.getItem('linkyaris_session');
+    if (saved) {
+      const u = JSON.parse(saved);
+      setUser(u);
+      refreshLobbies(u.joinedLobbyIds);
     }
-    setIsOnline(isOnlineMode());
+    setLoading(false);
   }, []);
 
-  // Restore user session
-  useEffect(() => {
-     const storedUser = localStorage.getItem('linkyaris_user_session');
-     if (storedUser) {
-         try {
-             setCurrentUser(JSON.parse(storedUser));
-         } catch (e) {
-             console.error("Failed to restore session");
-         }
-     }
-  }, []);
+  const refreshLobbies = async (ids: string[]) => {
+    const lobbies = await getUserJoinedLobbies(ids);
+    setJoinedLobbies(lobbies);
+  };
 
-  // Sync state from Storage Service
-  useEffect(() => {
-    if (!roomId) return;
-
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', roomId);
-    window.history.replaceState({}, '', url);
-
-    const unsubscribe = subscribeToGame(roomId, (newState) => {
-      setGameState(newState);
-    });
-
-    return () => {
-      // Cleanup managed by service
-    };
-  }, [roomId]);
-
-  // Handle Pending Login
-  useEffect(() => {
-    if (pendingLogin && gameState && roomId) {
-        const tryJoin = async () => {
-            const success = await executeJoin(pendingLogin.name, pendingLogin.password, pendingLogin.isMod);
-            if (success) {
-                setPendingLogin(null);
-                setLoginError('');
-            } else {
-                setPendingLogin(null);
-                setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
-            }
-        };
-        tryJoin();
-    }
-  }, [gameState, pendingLogin, roomId]);
-
-
-  // Actual Logic to Modify State
-  const executeJoin = async (name: string, password?: string, isMod: boolean = false): Promise<boolean> => {
-      if (!roomId) return false;
-
-      const finalName = isMod && name === 'Moderatör' ? 'Moderatör (Berkay)' : name;
-      
-      const existingUser = gameState.users.find(u => u.name === finalName && u.isMod === isMod);
-      let userToSet: User;
-  
-      if (existingUser) {
-        if (!isMod) {
-           const storedPassword = existingUser.password || "";
-           const inputPassword = password || "";
-           if (storedPassword !== inputPassword) {
-               return false;
-           }
-        }
-        userToSet = { ...existingUser, password: existingUser.password || "" };
+  const handleLogin = async (u: string, p: string, isRegister: boolean) => {
+    try {
+      let loggedUser;
+      if (isRegister) {
+        const randomChar = CHARACTER_POOL[Math.floor(Math.random() * CHARACTER_POOL.length)];
+        loggedUser = await registerUser(u, p, randomChar.name, randomChar.image, randomChar.color);
       } else {
-        if (gameState.users.some(u => u.name === finalName)) return false;
-
-        userToSet = {
-          id: crypto.randomUUID(),
-          name: finalName,
-          isMod: isMod,
-          joinedAt: Date.now(),
-          password: password || ""
-        };
-        
-        try {
-            await addUserToGame(roomId, userToSet);
-        } catch (e) {
-            console.error("Failed to join room:", e);
-            return false;
-        }
+        loggedUser = await loginUser(u, p);
       }
-  
-      setCurrentUser(userToSet);
-      localStorage.setItem('linkyaris_user_session', JSON.stringify(userToSet));
-      return true;
-  };
-
-  const handleConnectAndJoin = async (roomInput: string, name: string, password?: string, isMod: boolean = false) => {
-      const cleanRoom = roomInput.trim();
-      if (!cleanRoom) return false;
-
-      setIsVerifying(true);
-      setLoginError('');
-
-      if (!isMod) {
-        const exists = await doesRoomExist(cleanRoom);
-        if (!exists) {
-            setLoginError('Böyle bir oda bulunamadı. Lütfen oda numarasını kontrol edin.');
-            setIsVerifying(false);
-            return false;
-        }
-      }
-
-      if (roomId === cleanRoom) {
-          const success = await executeJoin(name, password, isMod);
-          if (!success) {
-             setLoginError('Giriş başarısız. İsim kullanımda veya şifre hatalı.');
-          }
-          setIsVerifying(false);
-          return success;
-      }
-
-      setRoomId(cleanRoom);
-      setPendingLogin({ name, password, isMod });
-      return true; 
-  };
-
-  // FIX: Use addSubmissionToGame to avoid overwriting users
-  const handleSubmitLink = (url: string, description: string) => {
-    if (!currentUser || !roomId) return;
-    
-    const newSubmission: Submission = {
-      id: crypto.randomUUID(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      url,
-      description,
-      votes: {}
-    };
-
-    addSubmissionToGame(roomId, newSubmission);
-  };
-
-  // FIX: Use updateGameStatus to avoid overwriting users
-  const handleStartGame = (duration: number) => {
-    if (!roomId) return;
-    updateGameStatus(roomId, {
-      status: AppStatus.VOTING,
-      currentSubmissionIndex: 0,
-      settings: {
-        timerDuration: duration
-      },
-      roundEndTime: Date.now() + (duration * 1000)
-    });
-  };
-
-  // FIX: Use submitVote to avoid overwriting
-  const handleVote = (score: number) => {
-    if (!currentUser || !roomId) return;
-    // We pass the index and score. The service handles the path.
-    submitVote(roomId, gameState.currentSubmissionIndex, currentUser.id, score);
-  };
-
-  // FIX: Use updateGameStatus
-  const handleNextSubmission = () => {
-    if (!roomId) return;
-    const nextIndex = gameState.currentSubmissionIndex + 1;
-    if (nextIndex < gameState.submissions.length) {
-      updateGameStatus(roomId, {
-        currentSubmissionIndex: nextIndex,
-        roundEndTime: Date.now() + (gameState.settings.timerDuration * 1000)
-      });
+      setUser(loggedUser);
+      localStorage.setItem('linkyaris_session', JSON.stringify(loggedUser));
+      refreshLobbies(loggedUser.joinedLobbyIds);
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
-  // FIX: Use updateGameStatus
-  const handleFinishGame = () => {
-    if (!roomId) return;
-    updateGameStatus(roomId, {
-      status: AppStatus.RESULTS
-    });
+  const handleCreateLobby = async (name: string) => {
+    if (!user) return;
+    const id = await createLobby(user.id, name);
+    setActiveLobbyId(id);
+    const updatedUser = await loginUser(user.username, user.password!);
+    setUser(updatedUser);
+    refreshLobbies(updatedUser.joinedLobbyIds);
   };
 
-  // FIX: Use updateAiComment
-  const handleUpdateAiComment = (submissionId: string, comment: string) => {
-     if (!roomId) return;
-     // Finding index for optimization, though ID lookup could be implemented in service
-     const index = gameState.submissions.findIndex(s => s.id === submissionId);
-     if (index !== -1) {
-         updateAiComment(roomId, index, comment);
-     }
-  };
-
-  const handleReset = () => {
-    if (!roomId) return;
-    
-    // Check if user wants a full wipe or just a new round
-    // We'll default to "New Round" (Keeping users) as requested "lobiyi sıfırla" usually means reset game state
-    // but the user also asked to keep users in logs. 
-    
-    if (confirm("YENİ YARIŞMA: Mevcut kullanıcıları odada tutup, sadece linkleri ve oyları sıfırlamak istiyor musun?\n\n(İptal dersen hiçbir şey olmaz)")) {
-        softResetGame(roomId);
+  const handleJoinLobby = async (id: string) => {
+    if (!user) return;
+    try {
+      await joinLobby(user.id, id);
+      setActiveLobbyId(id);
+      const updatedUser = await loginUser(user.username, user.password!);
+      setUser(updatedUser);
+      refreshLobbies(updatedUser.joinedLobbyIds);
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
-  const handleSignOut = () => {
-    localStorage.removeItem('linkyaris_user_session');
-    setCurrentUser(null);
-    setRoomId(null); 
-    window.location.href = window.location.pathname; 
-  };
+  if (loading) return <div className="flex items-center justify-center h-screen text-amber-500 font-black animate-pulse">ARENA YÜKLENİYOR...</div>;
 
-  const currentSubmission = 
-    gameState.status === AppStatus.VOTING && gameState.submissions.length > 0 
-    ? gameState.submissions[gameState.currentSubmissionIndex] 
-    : undefined;
+  if (!user) return <LoginView onAuth={handleLogin} />;
 
-  // Render Logic
   return (
-    <div className="min-h-screen text-gray-100 p-4 md:p-8 font-sans">
-      {/* Top Bar - Only show if logged in */}
-      {currentUser && (
-      <div className="flex justify-between items-center max-w-7xl mx-auto mb-8 pb-4 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 backdrop-blur-sm">
-            LY
-          </div>
-          <div className="hidden sm:block">
-             <span className="font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block leading-tight">LinkYarış</span>
-             <span className="text-xs text-indigo-400 font-mono font-bold tracking-wider">ODA: {roomId}</span>
+    <div className="flex h-screen overflow-hidden bg-royale-dark text-white">
+      {/* Sidebar - Royale Edition */}
+      <aside className="w-80 bg-[#0f172a] border-r border-white/5 flex flex-col relative shadow-2xl z-20">
+        <div className="p-8 border-b border-white/5">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-8 h-8 bg-amber-500 rounded flex items-center justify-center text-black font-black">W</div>
+            <h1 className="text-xl font-black tracking-tighter uppercase">WebIn<span className="text-amber-500">Royale</span></h1>
           </div>
           
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isOnline ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-            {isOnline ? (
-                <>
-                    <WifiIcon className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Online</span>
-                </>
-            ) : (
-                <>
-                    <SignalSlashIcon className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Offline</span>
-                </>
-            )}
+          <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-amber-500/30 transition-all">
+            <div className={`w-12 h-12 rounded-xl ${user.characterColor} flex items-center justify-center shrink-0 shadow-lg`}>
+              <img src={user.avatarImage} alt="Avatar" className="w-10 h-10" />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest truncate">{user.username}</p>
+              <p className="text-lg font-bold truncate leading-tight">{user.nickname}</p>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
-                <div className="text-gray-200">
-                  {currentUser.isMod ? (
-                    <span className="text-yellow-400 font-bold flex items-center gap-2">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-                        </span>
-                        Moderatör
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                      {currentUser.name}
-                    </span>
-                  )}
-                </div>
-              </div>
+        <nav className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div>
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-2 mb-4">Aktif Arenalarım</p>
+            <div className="space-y-2">
               <button 
-                onClick={handleSignOut}
-                className="bg-red-500/20 hover:bg-red-500/40 text-red-300 px-3 py-2 rounded-full text-xs font-bold transition-colors border border-red-500/30"
+                onClick={() => setActiveLobbyId(null)}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 font-bold ${!activeLobbyId ? 'bg-amber-500 text-black' : 'hover:bg-white/5 text-gray-400'}`}
               >
-                Çıkış
+                <Squares2X2Icon className="w-5 h-5" /> Ana Ekran
               </button>
-        </div>
-      </div>
-      )}
+              
+              {joinedLobbies.map(lobby => (
+                <button 
+                  key={lobby.id}
+                  onClick={() => setActiveLobbyId(lobby.id)}
+                  className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between group ${activeLobbyId === lobby.id ? 'bg-white/10 text-amber-500 border border-amber-500/20' : 'hover:bg-white/5 text-gray-400'}`}
+                >
+                  <span className="font-bold truncate flex items-center gap-2">
+                    <TrophyIcon className={`w-4 h-4 ${activeLobbyId === lobby.id ? 'text-amber-500' : 'text-gray-600'}`} />
+                    {lobby.name}
+                  </span>
+                  <span className="text-[10px] font-mono bg-black/40 px-2 py-1 rounded text-gray-500">#{lobby.id}</span>
+                </button>
+              ))}
+              
+              {joinedLobbies.length === 0 && <p className="text-xs text-gray-600 px-4 italic py-4">Henüz bir arenaya girmedin.</p>}
+            </div>
+          </div>
+        </nav>
 
-      {!isOnline && currentUser && (
-        <div className="max-w-7xl mx-auto mb-6 bg-red-900/20 border border-red-500/30 rounded-xl p-6 flex flex-col md:flex-row items-start gap-4 animate-pulse-slow">
-            <div className="bg-red-500/20 p-3 rounded-xl text-red-500 shrink-0">
-                <ExclamationTriangleIcon className="w-8 h-8" />
-            </div>
-            <div>
-                <h4 className="font-black text-red-400 text-lg mb-1">DİKKAT: Veritabanı Bağlı Değil!</h4>
-                <p className="text-sm text-red-200/80 leading-relaxed">
-                    Offline Moddasınız.
-                </p>
-            </div>
+        <div className="p-6 border-t border-white/5 bg-black/20">
+          <button 
+            onClick={() => { localStorage.clear(); setUser(null); }}
+            className="w-full py-4 px-4 text-xs font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all flex items-center justify-center gap-2 border border-transparent hover:border-red-500/20"
+          >
+            <PowerIcon className="w-4 h-4" /> OTURUMU KAPAT
+          </button>
         </div>
-      )}
+      </aside>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto transition-all duration-500 ease-in-out">
-        {(!currentUser) && (
-           <LobbyView 
-            roomId={roomId || ""}
-            currentUser={null}
-            users={[]}
-            submissions={[]}
-            onJoin={handleConnectAndJoin}
-            onSubmitLink={() => {}}
-            onStartGame={() => {}}
-            isMod={false}
-            externalError={loginError}
-            isLoading={!!pendingLogin || isVerifying}
+      <main className="flex-1 overflow-y-auto bg-animated relative z-10">
+        {activeLobbyId ? (
+          <PersistentLobbyView 
+            lobbyId={activeLobbyId} 
+            user={user} 
+            onClose={() => setActiveLobbyId(null)} 
           />
-        )}
-
-        {currentUser && gameState.status === AppStatus.LOBBY && (
-          <LobbyView 
-            roomId={roomId || ""}
-            currentUser={currentUser}
-            users={gameState.users}
-            submissions={gameState.submissions}
-            onJoin={() => true} 
-            onSubmitLink={handleSubmitLink}
-            onStartGame={handleStartGame}
-            isMod={currentUser.isMod}
-          />
-        )}
-
-        {currentUser && gameState.status === AppStatus.VOTING && (
-          currentSubmission ? (
-            <VotingView 
-              key={gameState.currentSubmissionIndex}
-              currentSubmission={currentSubmission}
-              isMod={currentUser.isMod}
-              currentUser={currentUser}
-              users={gameState.users}
-              onVote={handleVote}
-              onNext={handleNextSubmission}
-              onFinish={handleFinishGame}
-              isLast={gameState.currentSubmissionIndex === gameState.submissions.length - 1}
-              onUpdateAiComment={handleUpdateAiComment}
-              roundEndTime={gameState.roundEndTime}
-            />
-          ) : (
-            <div className="text-center py-20 animate-fade-in">
-              <h2 className="text-3xl font-bold text-white mb-4">Veri Yükleniyor...</h2>
-              {currentUser.isMod && (
-                <button onClick={handleFinishGame} className="bg-indigo-600 px-6 py-3 rounded-xl font-bold">Sonuçlara Geç</button>
-              )}
-            </div>
-          )
-        )}
-
-        {currentUser && gameState.status === AppStatus.RESULTS && (
-          <ResultsView 
-            submissions={gameState.submissions}
-            onReset={handleReset}
-            isMod={currentUser.isMod}
+        ) : (
+          <Dashboard 
+            onCreate={handleCreateLobby} 
+            onJoin={handleJoinLobby} 
           />
         )}
       </main>

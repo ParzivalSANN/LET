@@ -1,54 +1,48 @@
+
 export interface User {
   id: string;
-  name: string;
-  isMod: boolean;
-  joinedAt: number;
-  password?: string; // Optional for backward compatibility, but used for reconnection
+  username: string; // Login name
+  password?: string;
+  nickname: string; // Randomly assigned
+  avatarImage: string;
+  characterColor: string;
+  joinedLobbyIds: string[];
+  isMod?: boolean; // Added to support moderator role
 }
 
-export interface Vote {
-  userId: string;
-  score: number; // 1-10, 0 means timeout/skip
+export enum LobbyStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED'
 }
 
 export interface Submission {
   id: string;
   userId: string;
-  userName: string;
+  nickname: string;
+  avatarImage: string;
   url: string;
   description: string;
-  votes: Record<string, number>; // userId -> score mapping
+  votes: Record<string, number>; // voterUserId -> score
   aiCommentary?: string;
+  createdAt: number;
 }
 
-export enum AppStatus {
-  LOBBY = 'LOBBY',
-  VOTING = 'VOTING',
-  RESULTS = 'RESULTS'
-}
-
-export interface GameSettings {
-  timerDuration: number; // saniye cinsinden
+export interface Lobby {
+  id: string;
+  creatorId: string;
+  name: string;
+  status: LobbyStatus;
+  submissions: Submission[];
+  createdAt: number;
+  endedAt?: number;
 }
 
 export interface GameState {
-  status: AppStatus;
-  users: User[];
-  submissions: Submission[];
-  currentSubmissionIndex: number;
-  lastUpdated: number;
-  settings: GameSettings;
-  roundEndTime: number; // Timestamp for when the current round ends
+  lobbies: Record<string, Lobby>;
+  users: Record<string, User>;
 }
 
 export const INITIAL_STATE: GameState = {
-  status: AppStatus.LOBBY,
-  users: [],
-  submissions: [],
-  currentSubmissionIndex: -1,
-  lastUpdated: Date.now(),
-  settings: {
-    timerDuration: 30 // Varsayılan 30 saniye
-  },
-  roundEndTime: 0
+  lobbies: {},
+  users: {}
 };

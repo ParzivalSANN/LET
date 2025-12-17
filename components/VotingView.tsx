@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Submission, User, User as UserType } from '../types';
 import { ArrowTopRightOnSquareIcon, SparklesIcon, ChevronRightIcon, StarIcon, ChatBubbleBottomCenterTextIcon, ShieldCheckIcon, ClockIcon, UserGroupIcon, CheckIcon } from '@heroicons/react/24/solid';
 import { analyzeLink } from '../services/geminiService';
+import { CHARACTER_POOL } from '../data/characters';
 
 interface VotingViewProps {
   currentSubmission: Submission;
@@ -34,6 +35,14 @@ export const VotingView: React.FC<VotingViewProps> = ({
   const [hasTimedOut, setHasTimedOut] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Helper function to resolve image URL
+  // Using nickname as character identifier
+  const getUserImage = (u: User) => {
+      if (u.avatarImage) return u.avatarImage;
+      const found = CHARACTER_POOL.find(c => c.name === u.nickname);
+      return found ? found.image : null;
+  };
+
   // CRITICAL GUARD: If data is corrupted
   if (!currentSubmission) {
       return (
@@ -57,7 +66,6 @@ export const VotingView: React.FC<VotingViewProps> = ({
   const eligibleVoters = users.filter(u => !u.isMod && u.id !== currentSubmission.userId);
   
   // Calculate Progress
-  // Only count votes from eligible voters to avoid skewing the percentage
   const validVotesCount = eligibleVoters.filter(u => currentVotes[u.id] !== undefined).length;
   const totalEligibleCount = eligibleVoters.length;
   const progressPercent = totalEligibleCount > 0 ? (validVotesCount / totalEligibleCount) * 100 : 0;
@@ -187,14 +195,14 @@ export const VotingView: React.FC<VotingViewProps> = ({
             </div>
         </div>
         <h2 className="text-5xl font-black text-white mb-2 drop-shadow-lg tracking-tight">
-          {currentSubmission.userName}<span className="text-gray-600 font-light">'in</span> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Seçimi</span>
+          {currentSubmission.nickname}<span className="text-gray-600 font-light">'in</span> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Seçimi</span>
         </h2>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* Left: Content Card (8 Cols) */}
-        <div className="lg:col-span-8 bg-glass backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative group">
+        <div className="lg:col-span-8 bg-glass backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative group min-h-[400px]">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[100px] -z-10 group-hover:bg-indigo-600/15 transition-colors duration-700"></div>
           
           <div className="p-10 flex-1 flex flex-col justify-center text-center relative z-10">
@@ -265,12 +273,12 @@ export const VotingView: React.FC<VotingViewProps> = ({
         </div>
 
         {/* Right: Interaction Panel (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col space-y-6">
+        <div className="lg:col-span-4 flex flex-col space-y-6 sticky top-4">
           
           {isMod ? (
              // --- MODERATOR PANEL ---
              <>
-                <div className="bg-glass backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/10 shadow-xl flex-1 flex flex-col min-h-[300px]">
+                <div className="bg-glass backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/10 shadow-xl flex flex-col max-h-[500px]">
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 border-b border-white/10 pb-4">
                         <UserGroupIcon className="w-6 h-6 text-indigo-400" />
                         Oylama Durumu
@@ -285,13 +293,28 @@ export const VotingView: React.FC<VotingViewProps> = ({
                             eligibleVoters.map(voter => {
                                 const hasVoted = currentVotes[voter.id] !== undefined;
                                 const voteScore = currentVotes[voter.id]; 
+                                const displayImage = getUserImage(voter);
+
                                 return (
                                     <div key={voter.id} className="flex items-center justify-between bg-gray-800/40 p-3 rounded-xl border border-white/5 transition-all hover:bg-gray-800/60">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center font-bold text-xs text-gray-300">
-                                                {voter.name.charAt(0).toUpperCase()}
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm text-white shadow-sm overflow-hidden ${voter.characterColor || 'bg-gray-700'}`}>
+                                                {displayImage ? (
+                                                     <img 
+                                                        src={displayImage} 
+                                                        alt={voter.nickname} 
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                     />
+                                                ) : (
+                                                     voter.nickname || "👤"
+                                                )}
+                                                <div className="hidden text-sm">👤</div>
                                             </div>
-                                            <span className="text-sm font-bold text-gray-300 truncate max-w-[100px]">{voter.name}</span>
+                                            <span className="text-sm font-bold text-gray-300 truncate max-w-[100px]">{voter.nickname}</span>
                                         </div>
                                         {hasVoted ? (
                                             <div className="flex items-center gap-2 text-green-400 text-xs font-bold bg-green-900/20 px-2 py-1 rounded-lg border border-green-500/20">

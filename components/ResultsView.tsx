@@ -1,9 +1,10 @@
 import React from 'react';
-import { Submission } from '../types';
+import { Submission, User } from '../types';
 import { TrophyIcon, StarIcon } from '@heroicons/react/24/solid';
 
 interface ResultsViewProps {
   submissions: Submission[];
+  users?: User[]; // Optional passing of users map to find avatars if needed.
   onReset: () => void;
   isMod: boolean;
 }
@@ -38,7 +39,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ submissions, onReset, 
         <TrophyIcon className="w-32 h-32 text-yellow-400 mx-auto mb-6 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)] animate-pulse-slow" />
         <h2 className="text-5xl font-extrabold text-white mb-2 tracking-tight">Kazanan</h2>
         <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 to-yellow-600 mt-2">
-          {winner ? winner.userName : "Kimse?"}
+          {winner ? winner.nickname : "Kimse?"}
         </div>
         <div className="mt-4 text-gray-400">
            Ortalama: <span className="text-white font-bold text-xl">{winner?.average.toFixed(1)}</span>
@@ -77,7 +78,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ submissions, onReset, 
             <div className="flex items-center gap-6 pl-6">
               <div>
                 <h3 className="font-bold text-xl text-white group-hover:text-indigo-300 transition-colors">
-                  {item.userName}
+                  {item.nickname}
                   {index === 0 && <span className="ml-3 text-yellow-400 text-xs uppercase tracking-widest border border-yellow-500/50 px-2 py-0.5 rounded-full bg-yellow-500/10">Şampiyon</span>}
                 </h3>
                 <a href={item.url} target="_blank" className="text-gray-500 text-sm hover:text-white hover:underline transition-colors flex items-center gap-1 mt-1">
