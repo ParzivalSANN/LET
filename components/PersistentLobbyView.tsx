@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lobby, User, Submission, LobbyStatus } from '../types';
 import { subscribeToLobby, addSubmission, castVote, closeLobby } from '../services/storageService';
@@ -16,7 +17,13 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
   const [desc, setDesc] = useState('');
 
   useEffect(() => {
-    const unsub = subscribeToLobby(lobbyId, setLobby);
+    const unsub = subscribeToLobby(lobbyId, (updatedLobby) => {
+      // Firebase boş dizileri bazen null/undefined döndürdüğü için koruma ekliyoruz
+      if (updatedLobby && !updatedLobby.submissions) {
+        updatedLobby.submissions = [];
+      }
+      setLobby(updatedLobby);
+    });
     return () => unsub();
   }, [lobbyId]);
 
@@ -38,16 +45,17 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
     setDesc('');
   };
 
-  if (!lobby) return <div className="p-10 text-amber-500 font-bold animate-pulse">ARENA YÜKLENİYOR...</div>;
+  if (!lobby) return <div className="p-10 text-amber-500 font-bold animate-pulse text-center">ARENA YÜKLENİYOR...</div>;
 
   const isCreator = lobby.creatorId === user.id;
-  const hasSubmitted = lobby.submissions.some(s => s.userId === user.id);
+  const safeSubmissions = lobby.submissions || [];
+  const hasSubmitted = safeSubmissions.some(s => s.userId === user.id);
 
-  // Fix: Explicitly cast Object.values to number[] to ensure reduce returns a number for arithmetic operations (line 47, 48)
-  const sortedSubmissions = [...lobby.submissions].sort((a, b) => {
+  // Sıralama Mantığı: En yüksek puanlılar en üstte
+  const sortedSubmissions = [...safeSubmissions].sort((a, b) => {
     const avgA = (Object.values(a.votes || {}) as number[]).reduce((sum: number, v: number) => sum + v, 0) / (Object.values(a.votes || {}).length || 1);
     const avgB = (Object.values(b.votes || {}) as number[]).reduce((sum: number, v: number) => sum + v, 0) / (Object.values(b.votes || {}).length || 1);
-    return avgB - avgA; // Always show highest first for the Royale feel
+    return avgB - avgA;
   });
 
   return (
@@ -64,7 +72,7 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
             </span>
             <span className="bg-white/5 px-4 py-1.5 rounded-full text-gray-400 font-mono text-xs border border-white/5">ARENA #{lobbyId}</span>
             <span className="flex items-center gap-2 text-gray-500 text-xs font-bold bg-white/5 px-4 py-1.5 rounded-full border border-white/5">
-                <UserGroupIcon className="w-4 h-4" /> {lobby.submissions.length} YARIŞMACI
+                <UserGroupIcon className="w-4 h-4" /> {safeSubmissions.length} YARIŞMACI
             </span>
           </div>
           <h2 className="text-6xl font-black tracking-tighter text-white uppercase italic">{lobby.name}</h2>
@@ -97,7 +105,6 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
           const votes = sub.votes || {};
           const myVote = votes[user.id];
           const totalVotes = Object.values(votes).length;
-          // Fix: Explicitly cast Object.values to number[] to ensure reduce result is a number for division (line 99)
           const avgScore = totalVotes > 0 ? ((Object.values(votes) as number[]).reduce((a: number, b: number) => a + b, 0) / totalVotes).toFixed(1) : "0";
 
           return (
@@ -175,7 +182,7 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
         })}
       </div>
 
-      {lobby.submissions.length === 0 && (
+      {safeSubmissions.length === 0 && (
         <div className="text-center py-40 bg-[#0f172a] rounded-[3rem] border border-dashed border-white/5 shadow-inner">
           <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <FireIcon className="w-10 h-10 text-gray-600" />
@@ -227,4 +234,6 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
       )}
     </div>
   );
-}; export default PersistentLobbyView;
+};
+
+export default PersistentLobbyView;
