@@ -16,6 +16,7 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToLobby(lobbyId, (updatedLobby) => {
@@ -42,20 +43,33 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
   const assignments = submissions.filter(s => s.assignedVoters?.includes(user.id));
 
   const handleAdd = async () => {
-    if (!url) return;
-    const newSub: Submission = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      nickname: user.nickname,
-      avatarImage: user.avatarImage,
-      url: url.startsWith('http') ? url : `https://${url}`,
-      description: desc,
-      votes: {},
-      assignedVoters: [],
-      createdAt: Date.now()
-    };
-    await submitLink(lobbyId, newSub);
-    setShowAdd(false);
+    if (!url || isSubmitting) return;
+    try {
+        setIsSubmitting(true);
+        const submissionId = Math.random().toString(36).substr(2, 9);
+        const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+        
+        const newSub: Submission = {
+          id: submissionId,
+          userId: user.id,
+          nickname: user.nickname || "Savaşçı",
+          avatarImage: user.avatarImage || "",
+          url: formattedUrl,
+          description: desc,
+          votes: {},
+          assignedVoters: [],
+          createdAt: Date.now()
+        };
+        
+        await submitLink(lobbyId, newSub);
+        setUrl('');
+        setDesc('');
+        setShowAdd(false);
+    } catch (e) {
+        alert("Link eklenirken bir hata oluştu.");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const getStatusColor = (uid: string) => {
@@ -63,7 +77,7 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
       if (!sub) return 'bg-red-500';
       if (lobby.status === LobbyStatus.VOTING) {
           const myAssignments = submissions.filter(s => s.assignedVoters?.includes(uid));
-          const hasVotedAll = myAssignments.every(s => s.votes && s.votes[uid]);
+          const hasVotedAll = myAssignments.every(s => s.votes && s.votes[uid] !== undefined);
           return hasVotedAll ? 'bg-green-500' : 'bg-yellow-500';
       }
       return 'bg-blue-500';
@@ -72,8 +86,8 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
   const sortedResults = [...submissions].sort((a, b) => {
     const vA = Object.values(a.votes || {}) as number[];
     const vB = Object.values(b.votes || {}) as number[];
-    const avgA = vA.reduce((s, v) => s + v, 0) / (vA.length || 1);
-    const avgB = vB.reduce((s, v) => s + v, 0) / (vB.length || 1);
+    const avgA = vA.length > 0 ? vA.reduce((s, v) => s + v, 0) / vA.length : 0;
+    const avgB = vB.length > 0 ? vB.reduce((s, v) => s + v, 0) / vB.length : 0;
     return avgB - avgA;
   });
 
@@ -122,7 +136,7 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                                     <img src={sub.avatarImage} className="w-12 h-12 rounded-xl bg-white/5 p-1 object-cover" />
                                     <span className="text-amber-500 font-black uppercase tracking-widest text-lg">{sub.nickname}</span>
                                 </div>
-                                {sub.votes?.[user.id] ? (
+                                {sub.votes && sub.votes[user.id] !== undefined ? (
                                     <div className="bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-xs font-black border border-green-500/20">PUANIN: {sub.votes[user.id]}</div>
                                 ) : (
                                     <div className="bg-yellow-500/10 text-yellow-400 px-4 py-2 rounded-full text-xs font-black border border-yellow-500/20 animate-pulse">OY BEKLİYOR</div>
@@ -148,6 +162,11 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                             </div>
                         </div>
                     ))}
+                    {assignments.length === 0 && (
+                        <div className="p-20 text-center bg-white/5 rounded-[4rem] border border-white/5 border-dashed italic text-gray-500">
+                           Sana atanmış link bulunmuyor.
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -226,6 +245,39 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
             </div>
         </div>
       </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+           <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/10 w-full max-w-lg space-y-6">
+              <h3 className="text-3xl font-black text-white italic tracking-tight">LİNKİNİ GÖNDER</h3>
+              <div className="space-y-4">
+                  <input 
+                    type="text" 
+                    placeholder="Site URL (https://...)" 
+                    value={url}
+                    onChange={e => setUrl(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <textarea 
+                    placeholder="Savaş notun..." 
+                    value={desc}
+                    onChange={e => setDesc(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white h-32 resize-none outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+              </div>
+              <div className="flex gap-4">
+                  <button onClick={() => setShowAdd(false)} className="flex-1 text-gray-500 font-bold hover:text-white transition-colors">VAZGEÇ</button>
+                  <button 
+                    onClick={handleAdd} 
+                    disabled={!url || isSubmitting}
+                    className="flex-[2] bg-amber-500 hover:bg-amber-400 text-black py-4 rounded-2xl font-black uppercase transition-all shadow-xl disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'GÖNDERİLİYOR...' : 'SAVAŞA KATIL'}
+                  </button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }; export default PersistentLobbyView;
