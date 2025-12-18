@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Lobby, User, Submission, LobbyStatus } from '../types';
-import { subscribeToLobby, addSubmission, castVote, closeLobby } from '../services/storageService';
-import { StarIcon, CheckCircleIcon, TrophyIcon, ArrowTopRightOnSquareIcon, PlusCircleIcon, FireIcon, UserGroupIcon } from '@heroicons/react/24/solid';
+import { subscribeToLobby, submitLink, castVote, closeLobby, startVoting, getFullUser, getUserJoinedLobbies } from '../services/storageService';
+import { StarIcon, CheckCircleIcon, TrophyIcon, ArrowTopRightOnSquareIcon, PlusCircleIcon, FireIcon, UserGroupIcon, ShieldCheckIcon, ClockIcon } from '@heroicons/react/24/solid';
+import { CHARACTER_POOL } from '../data/characters';
 
 interface Props {
   lobbyId: string;
@@ -12,228 +13,228 @@ interface Props {
 
 const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
   const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [participantsInfo, setParticipantsInfo] = useState<Record<string, User>>({});
   const [showAdd, setShowAdd] = useState(false);
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
 
   useEffect(() => {
     const unsub = subscribeToLobby(lobbyId, (updatedLobby) => {
-      // Firebase boş dizileri bazen null/undefined döndürdüğü için koruma ekliyoruz
-      if (updatedLobby && !updatedLobby.submissions) {
-        updatedLobby.submissions = [];
-      }
       setLobby(updatedLobby);
+      // If mod, fetch real names
+      if (updatedLobby && updatedLobby.creatorId === user.id) {
+          Object.keys(updatedLobby.participants).forEach(async (pid) => {
+              const uInfo = await getFullUser(pid);
+              if (uInfo) setParticipantsInfo(prev => ({ ...prev, [pid]: uInfo }));
+          });
+      }
     });
     return () => unsub();
   }, [lobbyId]);
 
-  const handleAdd = async () => {
-    if (!url || !lobby) return;
-    const newSub: Submission = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      nickname: user.nickname,
-      avatarImage: user.avatarImage,
-      url: url.startsWith('http') ? url : `https://${url}`,
-      description: desc,
-      votes: {},
-      createdAt: Date.now()
-    };
-    await addSubmission(lobbyId, newSub);
-    setShowAdd(false);
-    setUrl('');
-    setDesc('');
-  };
-
   if (!lobby) return <div className="p-10 text-amber-500 font-bold animate-pulse text-center">ARENA YÜKLENİYOR...</div>;
 
   const isCreator = lobby.creatorId === user.id;
-  const safeSubmissions = lobby.submissions || [];
-  const hasSubmitted = safeSubmissions.some(s => s.userId === user.id);
+  // Type cast Object.values to Submission[] to fix unknown property errors
+  const submissions = Object.values(lobby.submissions || {}) as Submission[];
+  const participantIds = Object.keys(lobby.participants).filter(id => id !== lobby.creatorId);
+  
+  // My Submissions
+  const mySubmission = submissions.find(s => s.userId === user.id);
+  
+  // Submissions I need to vote on (Fair distribution)
+  const assignments = submissions.filter(s => s.assignedVoters?.includes(user.id));
 
-  // Sıralama Mantığı: En yüksek puanlılar en üstte
-  const sortedSubmissions = [...safeSubmissions].sort((a, b) => {
-    const avgA = (Object.values(a.votes || {}) as number[]).reduce((sum: number, v: number) => sum + v, 0) / (Object.values(a.votes || {}).length || 1);
-    const avgB = (Object.values(b.votes || {}) as number[]).reduce((sum: number, v: number) => sum + v, 0) / (Object.values(b.votes || {}).length || 1);
-    return avgB - avgA;
-  });
+  const handleAdd = async () => {
+    if (!url) return;
+    const randomChar = CHARACTER_POOL[Math.floor(Math.random() * CHARACTER_POOL.length)];
+    const newSub: Submission = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: user.id,
+      nickname: randomChar.name, // Anonymous per lobby
+      avatarImage: randomChar.image,
+      url: url.startsWith('http') ? url : `https://${url}`,
+      description: desc,
+      votes: {},
+      assignedVoters: [],
+      createdAt: Date.now()
+    };
+    await submitLink(lobbyId, newSub);
+    setShowAdd(false);
+  };
+
+  const getStatusColor = (uid: string) => {
+      const sub = submissions.find(s => s.userId === uid);
+      if (!sub) return 'bg-red-500'; // No link
+      if (lobby.status === LobbyStatus.VOTING) {
+          // Check if voted all assignments
+          const myAssignments = submissions.filter(s => s.assignedVoters?.includes(uid));
+          const hasVotedAll = myAssignments.every(s => s.votes && s.votes[uid]);
+          return hasVotedAll ? 'bg-green-500' : 'bg-yellow-500';
+      }
+      return 'bg-blue-500'; // Link submitted, waiting
+  };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in pb-20">
-      {/* Royale Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-8 bg-[#0f172a] p-12 rounded-[3rem] border border-white/5 relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 blur-[120px]"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/5 blur-[120px]"></div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6 pb-20">
+      {/* Header */}
+      <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h2 className="text-5xl font-black uppercase italic text-white">{lobby.name}</h2>
+          <div className="flex gap-4 mt-2">
+            <span className="text-gray-500 font-mono">Kod: #{lobbyId}</span>
+            <span className="text-amber-500 font-bold">{submissions.length} Link Havuzda</span>
+          </div>
+        </div>
         
-        <div className="relative z-10 text-center md:text-left">
-          <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 mb-4">
-            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${lobby.status === LobbyStatus.OPEN ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'}`}>
-              {lobby.status === LobbyStatus.OPEN ? '• ARENA AÇIK' : '• TAMAMLANDI'}
-            </span>
-            <span className="bg-white/5 px-4 py-1.5 rounded-full text-gray-400 font-mono text-xs border border-white/5">ARENA #{lobbyId}</span>
-            <span className="flex items-center gap-2 text-gray-500 text-xs font-bold bg-white/5 px-4 py-1.5 rounded-full border border-white/5">
-                <UserGroupIcon className="w-4 h-4" /> {safeSubmissions.length} YARIŞMACI
-            </span>
-          </div>
-          <h2 className="text-6xl font-black tracking-tighter text-white uppercase italic">{lobby.name}</h2>
-          <p className="text-gray-400 mt-4 max-w-xl font-medium">Bu arenada en yüksek puanı alan web sitesi şampiyonluğunu ilan eder. Adil oyla, en iyiyi seç!</p>
-        </div>
-
-        <div className="flex flex-col gap-4 relative z-10 w-full md:w-auto">
-          {lobby.status === LobbyStatus.OPEN && !hasSubmitted && (
+        {isCreator && lobby.status === LobbyStatus.OPEN && (
             <button 
-              onClick={() => setShowAdd(true)}
-              className="bg-amber-500 hover:bg-amber-400 text-black px-10 py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 transition-all shadow-[0_0_30px_rgba(251,191,36,0.2)] hover:scale-105 active:scale-95 uppercase tracking-widest"
+                onClick={() => startVoting(lobbyId)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-lg"
             >
-              <PlusCircleIcon className="w-6 h-6" /> LİNKİNİ PAYLAŞ
+                DAĞITIMI BAŞLAT VE OYLA
             </button>
-          )}
-          {isCreator && lobby.status === LobbyStatus.OPEN && (
+        )}
+        
+        {isCreator && lobby.status === LobbyStatus.VOTING && (
             <button 
-              onClick={() => confirm('Arenayı sonlandırmak istediğine emin misin?') && closeLobby(lobbyId)}
-              className="bg-transparent hover:bg-red-500/10 text-red-500 px-8 py-4 rounded-[1.5rem] font-bold border border-red-500/20 transition-all uppercase text-xs tracking-widest"
+                onClick={() => closeLobby(lobbyId)}
+                className="bg-amber-500 hover:bg-amber-400 text-black px-8 py-4 rounded-2xl font-black transition-all shadow-lg"
             >
-              ARENAYI KAPAT
+                ARENAYI SONLANDIR
             </button>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Contestants Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {sortedSubmissions.map((sub, index) => {
-          const votes = sub.votes || {};
-          const myVote = votes[user.id];
-          const totalVotes = Object.values(votes).length;
-          const avgScore = totalVotes > 0 ? ((Object.values(votes) as number[]).reduce((a: number, b: number) => a + b, 0) / totalVotes).toFixed(1) : "0";
-
-          return (
-            <div key={sub.id} className={`
-              bg-[#0f172a] border rounded-[2.5rem] p-10 flex flex-col group relative transition-all duration-500
-              ${index === 0 && totalVotes > 0 ? 'border-amber-500/40 shadow-[0_0_40px_rgba(251,191,36,0.1)] ring-2 ring-amber-500/10' : 'border-white/5 hover:border-white/20'}
-            `}>
-              {/* Placement Badge */}
-              <div className={`
-                absolute -top-4 -left-4 w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-2xl z-20 border-2
-                ${index === 0 && totalVotes > 0 ? 'bg-amber-500 text-black border-amber-400 rotate-[-12deg]' : 'bg-gray-800 text-white border-white/10'}
-              `}>
-                {index === 0 && totalVotes > 0 ? <TrophyIcon className="w-6 h-6" /> : `#${index + 1}`}
-              </div>
-
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`w-12 h-12 rounded-xl bg-white/5 p-1 flex items-center justify-center border border-white/10 group-hover:border-amber-500/30 transition-colors`}>
-                  <img src={sub.avatarImage} alt="Avatar" className="w-10 h-10 object-contain" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+            {lobby.status === LobbyStatus.OPEN && !mySubmission && !isCreator && (
+                <div className="bg-indigo-600/10 border border-indigo-500/30 p-10 rounded-[3rem] text-center">
+                    <FireIcon className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
+                    <h3 className="text-2xl font-bold mb-4">Henüz linkini paylaşmadın!</h3>
+                    <button onClick={() => setShowAdd(true)} className="bg-indigo-500 px-8 py-4 rounded-2xl font-bold">Link Ekle</button>
                 </div>
-                <div className="overflow-hidden">
-                  <span className="font-black text-white block truncate uppercase tracking-tight">{sub.nickname}</span>
-                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.2em]">Yarışmacı</span>
-                </div>
-              </div>
+            )}
 
-              <div className="flex-1 space-y-4">
-                <div className="relative group/title inline-block">
-                  <h4 className="text-2xl font-black text-white break-words leading-tight group-hover/title:text-amber-500 transition-colors">{new URL(sub.url).hostname}</h4>
-                </div>
-                <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 font-medium italic opacity-80 group-hover:opacity-100 transition-opacity">"{sub.description || 'Stratejik bir açıklama yapılmadı.'}"</p>
-                <a 
-                  href={sub.url} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-amber-500 hover:text-amber-400 text-xs font-black uppercase tracking-widest pt-2 group/btn"
-                >
-                  SİTEYİ İNCELE <ArrowTopRightOnSquareIcon className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                </a>
-              </div>
-
-              <div className="mt-10 pt-8 border-t border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-2xl ${index === 0 && totalVotes > 0 ? 'bg-amber-500/10 text-amber-500' : 'bg-white/5 text-gray-400'}`}>
-                    <FireIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <span className="text-3xl font-black text-white block leading-none">{avgScore}</span>
-                    <span className="text-[10px] text-gray-500 uppercase font-black">{totalVotes} OY</span>
-                  </div>
-                </div>
-
-                {lobby.status === LobbyStatus.OPEN && sub.userId !== user.id ? (
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button 
-                        key={star}
-                        onClick={() => castVote(lobbyId, sub.id, user.id, star)}
-                        className={`p-1.5 transition-all duration-300 hover:scale-125 ${myVote && myVote >= star ? 'text-amber-500' : 'text-gray-700'}`}
-                        title={`${star} Yıldız`}
-                      >
-                        <StarIcon className="w-6 h-6" />
-                      </button>
+            {lobby.status === LobbyStatus.VOTING && assignments.length > 0 && !isCreator && (
+                <div className="space-y-6">
+                    <h3 className="text-2xl font-black text-white uppercase italic">Sana Atanan Linkler ({assignments.length})</h3>
+                    {assignments.map(sub => (
+                        <div key={sub.id} className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-white/5 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-amber-500 font-bold uppercase tracking-widest">{sub.nickname}</span>
+                                {sub.votes && sub.votes[user.id] ? (
+                                    <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-bold">Oylandı: {sub.votes[user.id]}</span>
+                                ) : (
+                                    <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs font-bold">Oylama Bekliyor</span>
+                                )}
+                            </div>
+                            <h4 className="text-xl font-bold">{new URL(sub.url).hostname}</h4>
+                            <p className="text-gray-400 italic">"{sub.description || 'Açıklama yok'}"</p>
+                            <div className="flex gap-4">
+                                <a href={sub.url} target="_blank" className="bg-white/5 border border-white/10 p-4 rounded-xl flex-1 text-center font-bold hover:bg-white/10">Sitede Gezin</a>
+                                <div className="flex gap-1">
+                                    {[1, 2, 3, 4, 5].map(score => (
+                                        <button 
+                                            key={score}
+                                            onClick={() => castVote(lobbyId, sub.id, user.id, score)}
+                                            className={`w-12 h-12 rounded-xl font-bold transition-all ${sub.votes?.[user.id] === score ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                                        >
+                                            {score}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     ))}
-                  </div>
-                ) : (
-                  myVote && (
-                    <div className="flex items-center gap-2 text-emerald-400 font-black text-[10px] bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 uppercase tracking-widest">
-                      <CheckCircleIcon className="w-4 h-4" /> OY VERİLDİ
+                </div>
+            )}
+
+            {lobby.status === LobbyStatus.CLOSED && (
+                <div className="bg-amber-500 p-10 rounded-[3rem] text-black text-center">
+                    <TrophyIcon className="w-20 h-20 mx-auto mb-4" />
+                    <h2 className="text-4xl font-black">SONUÇLAR AÇIKLANDI!</h2>
+                    {/* Simplified: Show Top 1 */}
+                    {submissions.sort((a,b) => {
+                         const votesA = Object.values(a.votes || {}) as number[];
+                         const votesB = Object.values(b.votes || {}) as number[];
+                         const avgA = votesA.reduce((s,v)=>s+v,0) / (votesA.length || 1);
+                         const avgB = votesB.reduce((s,v)=>s+v,0) / (votesB.length || 1);
+                         return avgB - avgA;
+                    }).slice(0, 1).map(winner => {
+                        const winnerVotes = Object.values(winner.votes || {}) as number[];
+                        const avg = winnerVotes.reduce((s,v)=>s+v,0) / (winnerVotes.length || 1);
+                        return (
+                            <div key={winner.id} className="mt-6">
+                                <p className="text-2xl font-bold">Şampiyon: {winner.nickname}</p>
+                                <p className="text-lg">Ortalama Puan: {avg.toFixed(1)}</p>
+                                <p className="text-sm mt-4 opacity-50">Sistem sahibi moderatör gerçek isimleri panosundan görebilir.</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+
+        {/* Sidebar: Participants/Moderator Panel */}
+        <div className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-white/5 h-fit">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <UserGroupIcon className="w-5 h-5 text-gray-500" />
+                {isCreator ? 'Moderatör Takip Paneli' : 'Savaşçılar'}
+            </h3>
+            <div className="space-y-4">
+                {participantIds.map(pid => (
+                    <div key={pid} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${getStatusColor(pid)} shadow-lg shadow-current/20`}></div>
+                            <div className="flex flex-col">
+                                <span className="font-bold text-white text-sm">
+                                    {isCreator ? (participantsInfo[pid]?.realName || 'Yükleniyor...') : 'Gizli Savaşçı'}
+                                </span>
+                                {isCreator && <span className="text-[10px] text-gray-500">Okul No: {participantsInfo[pid]?.schoolNumber}</span>}
+                            </div>
+                        </div>
+                        {isCreator && submissions.find(s => s.userId === pid) && (
+                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                        )}
                     </div>
-                  )
-                )}
-              </div>
+                ))}
             </div>
-          );
-        })}
+            {isCreator && (
+                <div className="mt-8 text-[10px] text-gray-600 border-t border-white/5 pt-4">
+                    <p>🔴 Link Bekleniyor</p>
+                    <p>🟡 Oylama Bekleniyor (Link Paylaştı)</p>
+                    <p>🟢 Tüm Görevleri Tamamladı</p>
+                </div>
+            )}
+        </div>
       </div>
 
-      {safeSubmissions.length === 0 && (
-        <div className="text-center py-40 bg-[#0f172a] rounded-[3rem] border border-dashed border-white/5 shadow-inner">
-          <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FireIcon className="w-10 h-10 text-gray-600" />
-          </div>
-          <p className="text-gray-500 text-xl font-bold italic">Arena henüz sessiz. İlk linki sen paylaş ve savaşı başlat!</p>
-        </div>
-      )}
-
-      {/* Add Submission Modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#0f172a] p-12 rounded-[3.5rem] border border-amber-500/20 w-full max-w-2xl shadow-[0_0_100px_rgba(251,191,36,0.1)] space-y-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
-            
-            <h3 className="text-4xl font-black text-white uppercase italic tracking-tighter">Arenaya Giriş Yap</h3>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">Web Sitesi URL</label>
-                <input 
-                  type="text" 
-                  placeholder="https://ornek-site.com"
-                  value={url}
-                  onChange={e => setUrl(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all font-medium"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">Savaş Stratejisi (Açıklama)</label>
-                <textarea 
-                  placeholder="Bu site neden arenadaki en iyisi?"
-                  value={desc}
-                  onChange={e => setDesc(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white outline-none focus:ring-2 focus:ring-amber-500 h-40 resize-none transition-all font-medium"
-                />
-              </div>
-            </div>
-            <div className="flex gap-4 pt-4">
-              <button onClick={() => setShowAdd(false)} className="flex-1 py-5 text-gray-500 font-black uppercase tracking-widest hover:text-white transition-colors">İPTAL</button>
-              <button 
-                onClick={handleAdd} 
-                disabled={!url}
-                className="flex-[2] bg-amber-500 hover:bg-amber-400 text-black py-5 rounded-[2rem] font-black uppercase tracking-widest transition-all shadow-xl shadow-amber-500/10 disabled:opacity-50"
-              >
-                PAYLAŞ VE YARIŞ
-              </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-amber-500/20 w-full max-w-xl space-y-6">
+            <h3 className="text-3xl font-black text-white italic">Linkini Havuza Bırak</h3>
+            <input 
+              type="text" 
+              placeholder="URL (https://...)"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white"
+            />
+            <textarea 
+              placeholder="Kısa bir açıklama"
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white h-32"
+            />
+            <div className="flex gap-4">
+                <button onClick={() => setShowAdd(false)} className="flex-1 text-gray-500 font-bold">İptal</button>
+                <button onClick={handleAdd} className="flex-2 bg-amber-500 text-black py-4 rounded-2xl font-black">Link Paylaş</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-};
-
-export default PersistentLobbyView;
+}; export default PersistentLobbyView;
