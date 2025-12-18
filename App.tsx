@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lobby } from './types';
 import { loginUser, registerUser, getUserJoinedLobbies, createLobby, joinLobby } from './services/storageService';
+import { generateAvatarImage } from './services/geminiService';
 import { CHARACTER_POOL } from './data/characters';
 import Dashboard from './components/Dashboard';
 import LoginView from './components/LoginView';
@@ -13,13 +14,14 @@ const App: React.FC = () => {
   const [activeLobbyId, setActiveLobbyId] = useState<string | null>(null);
   const [joinedLobbies, setJoinedLobbies] = useState<Lobby[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('linkyaris_session');
     if (saved) {
       const u = JSON.parse(saved);
       setUser(u);
-      refreshLobbies(u.joinedLobbyIds);
+      refreshLobbies(u.joinedLobbyIds || []);
     }
     setLoading(false);
   }, []);
@@ -35,8 +37,19 @@ const App: React.FC = () => {
       let loggedUser;
       if (isRegister) {
         if(!realName) throw new Error("İsim alanı zorunludur!");
+        setIsGenerating(true);
+        
+        // Rastgele bir karakter seç ve onun için AI resmi oluştur
         const randomChar = CHARACTER_POOL[Math.floor(Math.random() * CHARACTER_POOL.length)];
-        loggedUser = await registerUser(p, realName, schoolNo, randomChar.image, randomChar.color);
+        const aiAvatar = await generateAvatarImage(randomChar.name);
+        
+        // AI başarısız olursa varsayılan bir emoji/renk kullanırız
+        const finalAvatar = aiAvatar || ""; 
+        
+        loggedUser = await registerUser(p, realName, schoolNo, finalAvatar, randomChar.color);
+        // Karakter ismini nickname olarak atayalım
+        loggedUser.nickname = randomChar.name;
+        setIsGenerating(false);
       } else {
         loggedUser = await loginUser(schoolNo, p);
       }
@@ -44,33 +57,47 @@ const App: React.FC = () => {
       localStorage.setItem('linkyaris_session', JSON.stringify(loggedUser));
       refreshLobbies(loggedUser.joinedLobbyIds || []);
     } catch (e: any) {
+      setIsGenerating(false);
       alert(e.message);
     }
   };
 
+  // Fix: Implemented handleCreateLobby to allow users to create new game rooms
   const handleCreateLobby = async (name: string) => {
     if (!user) return;
-    const id = await createLobby(user.id, name);
-    setActiveLobbyId(id);
-    const updatedUser = await loginUser(user.schoolNumber, user.password!);
-    setUser(updatedUser);
-    refreshLobbies(updatedUser.joinedLobbyIds);
-  };
-
-  const handleJoinLobby = async (id: string) => {
-    if (!user) return;
     try {
-      await joinLobby(user.id, id);
-      setActiveLobbyId(id);
-      const updatedUser = await loginUser(user.schoolNumber, user.password!);
-      setUser(updatedUser);
-      refreshLobbies(updatedUser.joinedLobbyIds);
+      const lobbyId = await createLobby(user.id, name);
+      await handleJoinLobby(lobbyId);
     } catch (e: any) {
       alert(e.message);
     }
   };
 
+  // Fix: Implemented handleJoinLobby to allow users to enter existing rooms by code
+  const handleJoinLobby = async (id: string) => {
+    if (!user) return;
+    try {
+      await joinLobby(user.id, id);
+      const updatedUser = { ...user, joinedLobbyIds: [...(user.joinedLobbyIds || []), id] };
+      setUser(updatedUser);
+      localStorage.setItem('linkyaris_session', JSON.stringify(updatedUser));
+      setActiveLobbyId(id);
+      refreshLobbies(updatedUser.joinedLobbyIds);
+    } catch (e: any) {
+      alert("Oda bulunamadı veya katılım başarısız.");
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-screen text-amber-500 font-black animate-pulse">ARENA YÜKLENİYOR...</div>;
+  
+  if (isGenerating) return (
+    <div className="flex flex-col items-center justify-center h-screen bg-[#020617] text-white p-10 text-center">
+        <div className="w-24 h-24 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-8"></div>
+        <h2 className="text-4xl font-black mb-4 italic uppercase">Karakterin Tasarlanıyor...</h2>
+        <p className="text-gray-400 max-w-md">Gemini AI senin için benzersiz bir savaşçı avatarı oluşturuyor. Bu işlem birkaç saniye sürebilir.</p>
+    </div>
+  );
+
   if (!user) return <LoginView onAuth={handleAuth} />;
 
   return (
@@ -81,9 +108,12 @@ const App: React.FC = () => {
             <div className="w-8 h-8 bg-amber-500 rounded flex items-center justify-center text-black font-black">W</div>
             <h1 className="text-xl font-black tracking-tighter uppercase">WebIn<span className="text-amber-500">Royale</span></h1>
           </div>
-          <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-              <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest">{user.schoolNumber}</p>
-              <p className="text-lg font-bold truncate leading-tight">{user.realName}</p>
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-3">
+              {user.avatarImage && <img src={user.avatarImage} className="w-10 h-10 rounded-lg object-cover" />}
+              <div className="truncate">
+                  <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest leading-none mb-1">{user.schoolNumber}</p>
+                  <p className="text-sm font-bold truncate leading-tight">{user.realName}</p>
+              </div>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto p-6 space-y-2">
