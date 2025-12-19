@@ -26,8 +26,8 @@ export const analyzeLink = async (url: string, description: string): Promise<str
 
 export const generateAvatarImage = async (characterName: string): Promise<string | null> => {
   try {
-    // Karakter ismine göre spesifik bir prompt oluşturuyoruz
-    const finalPrompt = `A high-quality 3D avatar icon of a ${characterName}, Pixar style, vibrant colors, solid dark blue background, professional lighting, centered, masterpiece.`;
+    // Prompt'u daha güvenli ve açıklayıcı hale getirdik (reddedilme riskini azaltmak için)
+    const finalPrompt = `A simple, stylized 3D icon of a cute ${characterName} character, centered, toy-like aesthetic, soft lighting, solid dark background, minimalist design, high resolution.`;
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
@@ -39,16 +39,19 @@ export const generateAvatarImage = async (characterName: string): Promise<string
       }
     });
     
+    // Yanıtın içinde görsel verisini bulmak için tüm parçaları tarıyoruz
     if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
             if (part.inlineData && part.inlineData.data) {
-                return `data:image/png;base64,${part.inlineData.data}`;
+                // Base64 verisinin başında boşluk vb. olmadığından emin oluyoruz
+                const base64 = part.inlineData.data.trim();
+                return `data:image/png;base64,${base64}`;
             }
         }
     }
     return null;
   } catch (e) {
-    console.error("Avatar generation failed:", e);
+    console.error("AI Avatar üretimi başarısız oldu:", e);
     return null;
   }
 };

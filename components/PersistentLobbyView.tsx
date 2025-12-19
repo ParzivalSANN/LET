@@ -133,7 +133,13 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                         <div key={sub.id} className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/5 space-y-6 transition-all hover:border-white/10">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-4">
-                                    <img src={sub.avatarImage} className="w-12 h-12 rounded-xl bg-white/5 p-1 object-cover" />
+                                    <div className="w-12 h-12 rounded-xl bg-gray-900 border border-white/10 overflow-hidden shadow-inner flex items-center justify-center">
+                                      {sub.avatarImage ? (
+                                        <img src={sub.avatarImage} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                      ) : (
+                                        <span className="text-amber-500 font-bold">👤</span>
+                                      )}
+                                    </div>
                                     <span className="text-amber-500 font-black uppercase tracking-widest text-lg">{sub.nickname}</span>
                                 </div>
                                 {sub.votes && sub.votes[user.id] !== undefined ? (
@@ -181,7 +187,9 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                             <div className="flex-1 max-w-[250px] space-y-4 text-center order-1">
                                 <div className="relative group">
                                     <div className="w-24 h-24 rounded-3xl bg-slate-400 mx-auto mb-4 border-4 border-slate-300 shadow-2xl flex items-center justify-center text-4xl font-black text-slate-800">2</div>
-                                    <img src={sortedResults[1].avatarImage} className="w-16 h-16 absolute -top-8 -right-4 rounded-xl border-2 border-slate-400 bg-gray-900 p-1 object-cover" />
+                                    <div className="w-16 h-16 absolute -top-8 -right-4 rounded-xl border-2 border-slate-400 bg-gray-900 p-1 shadow-lg overflow-hidden">
+                                        <img src={sortedResults[1].avatarImage} className="w-full h-full object-cover" />
+                                    </div>
                                 </div>
                                 <div className="bg-slate-500/10 p-4 rounded-2xl border border-slate-400/20">
                                     <h4 className="text-white font-black uppercase text-sm truncate">{participantsInfo[sortedResults[1].userId]?.realName || 'Gizli'}</h4>
@@ -194,7 +202,9 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                             <div className="flex-1 max-w-[300px] space-y-4 text-center order-2 -mt-10">
                                 <div className="relative group">
                                     <div className="w-32 h-32 rounded-[2.5rem] bg-amber-500 mx-auto mb-4 border-4 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.3)] flex items-center justify-center text-6xl font-black text-amber-900">1</div>
-                                    <img src={sortedResults[0].avatarImage} className="w-20 h-20 absolute -top-10 -right-4 rounded-2xl border-4 border-amber-500 bg-gray-900 p-1 animate-bounce object-cover" />
+                                    <div className="w-20 h-20 absolute -top-10 -right-4 rounded-2xl border-4 border-amber-500 bg-gray-900 p-1 animate-bounce shadow-2xl overflow-hidden">
+                                        <img src={sortedResults[0].avatarImage} className="w-full h-full object-cover" />
+                                    </div>
                                 </div>
                                 <div className="bg-amber-500/10 p-6 rounded-[2rem] border border-amber-500/20 shadow-xl">
                                     <h4 className="text-amber-500 text-2xl font-black uppercase tracking-tight truncate">{participantsInfo[sortedResults[0].userId]?.realName || 'Gizli'}</h4>
@@ -207,7 +217,9 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
                             <div className="flex-1 max-w-[250px] space-y-4 text-center order-3">
                                 <div className="relative group">
                                     <div className="w-24 h-24 rounded-3xl bg-orange-700 mx-auto mb-4 border-4 border-orange-600 shadow-2xl flex items-center justify-center text-4xl font-black text-orange-200">3</div>
-                                    <img src={sortedResults[2].avatarImage} className="w-16 h-16 absolute -top-8 -right-4 rounded-xl border-2 border-orange-700 bg-gray-900 p-1 object-cover" />
+                                    <div className="w-16 h-16 absolute -top-8 -right-4 rounded-xl border-2 border-orange-700 bg-gray-900 p-1 shadow-lg overflow-hidden">
+                                        <img src={sortedResults[2].avatarImage} className="w-full h-full object-cover" />
+                                    </div>
                                 </div>
                                 <div className="bg-orange-700/10 p-4 rounded-2xl border border-orange-700/20">
                                     <h4 className="text-white font-black uppercase text-sm truncate">{participantsInfo[sortedResults[2].userId]?.realName || 'Gizli'}</h4>
@@ -228,11 +240,17 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
             </h3>
             <div className="space-y-4">
                 {participantIds.map(pid => (
-                    <div key={pid} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5 group">
+                    <div key={pid} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5 group hover:border-white/10 transition-all">
                         <div className="flex items-center gap-3">
                             <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(pid)} shadow-[0_0_10px_rgba(0,0,0,0.5)]`}></div>
                             <div className="flex items-center gap-2">
-                                {participantsInfo[pid]?.avatarImage && <img src={participantsInfo[pid].avatarImage} className="w-6 h-6 rounded-md object-cover" />}
+                                <div className="w-8 h-8 rounded-lg bg-gray-900 border border-white/5 overflow-hidden flex items-center justify-center">
+                                    {participantsInfo[pid]?.avatarImage ? (
+                                        <img src={participantsInfo[pid].avatarImage} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-[10px]">👤</span>
+                                    )}
+                                </div>
                                 <div className="flex flex-col">
                                     <span className="font-bold text-white text-xs group-hover:text-amber-500 transition-colors">
                                         {isCreator ? (participantsInfo[pid]?.realName || '...') : 'Gizli Savaşçı'}
@@ -248,29 +266,35 @@ const PersistentLobbyView: React.FC<Props> = ({ lobbyId, user, onClose }) => {
 
       {showAdd && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-           <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/10 w-full max-w-lg space-y-6">
-              <h3 className="text-3xl font-black text-white italic tracking-tight">LİNKİNİ GÖNDER</h3>
+           <div className="bg-[#0f172a] p-10 rounded-[3rem] border border-white/10 w-full max-w-lg space-y-6 shadow-2xl">
+              <h3 className="text-3xl font-black text-white italic tracking-tight uppercase">LİNKİNİ GÖNDER</h3>
               <div className="space-y-4">
-                  <input 
-                    type="text" 
-                    placeholder="Site URL (https://...)" 
-                    value={url}
-                    onChange={e => setUrl(e.target.value)}
-                    className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <textarea 
-                    placeholder="Savaş notun..." 
-                    value={desc}
-                    onChange={e => setDesc(e.target.value)}
-                    className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white h-32 resize-none outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+                  <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Hedef URL</label>
+                      <input 
+                        type="text" 
+                        placeholder="https://..." 
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                        className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Savaş Notun</label>
+                      <textarea 
+                        placeholder="Neden bu link?" 
+                        value={desc}
+                        onChange={e => setDesc(e.target.value)}
+                        className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white h-32 resize-none outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                      />
+                  </div>
               </div>
               <div className="flex gap-4">
-                  <button onClick={() => setShowAdd(false)} className="flex-1 text-gray-500 font-bold hover:text-white transition-colors">VAZGEÇ</button>
+                  <button onClick={() => setShowAdd(false)} className="flex-1 text-gray-500 font-bold hover:text-white transition-colors uppercase tracking-widest text-xs">VAZGEÇ</button>
                   <button 
                     onClick={handleAdd} 
                     disabled={!url || isSubmitting}
-                    className="flex-[2] bg-amber-500 hover:bg-amber-400 text-black py-4 rounded-2xl font-black uppercase transition-all shadow-xl disabled:opacity-50"
+                    className="flex-[2] bg-amber-500 hover:bg-amber-400 text-black py-4 rounded-2xl font-black uppercase transition-all shadow-xl disabled:opacity-50 tracking-widest"
                   >
                     {isSubmitting ? 'GÖNDERİLİYOR...' : 'SAVAŞA KATIL'}
                   </button>
